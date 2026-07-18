@@ -1,9 +1,9 @@
 export default typeof definePageConfig === 'function'
   ? definePageConfig({
-      navigationStyle: 'custom',
+      navigationBarTitleText: '唐小识无人配送',
       backgroundColor: '#F8FAFB',
     })
   : {
-      navigationStyle: 'custom',
+      navigationBarTitleText: '唐小识无人配送',
       backgroundColor: '#F8FAFB',
     }

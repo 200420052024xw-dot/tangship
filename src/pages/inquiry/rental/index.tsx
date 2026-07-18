@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
+import { ArrowLeft } from 'lucide-react-taro'
 import { ContactPopup } from '@/components/inquiry/ContactPopup'
 import { consumerRequest } from '@/services/consumer-api'
 
@@ -80,8 +81,16 @@ const RentalInquiryPage: FC = () => {
 
   return (
     <View className="min-h-screen bg-slate-50 pb-28">
-      {/* 安全区顶部留白（自定义导航栏模式） */}
-      <View style={{ height: 'env(safe-area-inset-top, 0px)', backgroundColor: '#fff' }} />
+      {/* 自定义导航栏 — 与车型详情页一致 */}
+      <View style={{ position: 'sticky', top: 0, zIndex: 10 }} className="bg-white border-b border-slate-100">
+        <View style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+        <View className="flex items-center px-4 h-12">
+          <View className="flex items-center gap-2" onClick={() => Taro.navigateBack()}>
+            <ArrowLeft size={18} color="#1E293B" />
+            <Text className="block text-base font-medium text-slate-800">租购服务</Text>
+          </View>
+        </View>
+      </View>
 
       <View className="p-4">
         <Text className="block text-sm text-slate-500 mb-4">
