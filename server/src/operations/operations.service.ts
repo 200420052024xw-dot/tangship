@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StorageService } from '../storage/storage.service';
 import { CANONICAL_VEHICLES } from './vehicle-catalog.seed';
+import { serverCache, CACHE_TTL, CACHE_KEYS } from '../common/server-cache';
 
 export const DEFAULT_PRICING = {
   baseDistanceMeters: 3000, baseFeeCents: 2500, distanceFeePerKmCents: 400,
@@ -64,28 +65,43 @@ export class OperationsService implements OnModuleInit {
   }
 
   async listVehicles(admin = false) {
+    const cacheKey = admin ? CACHE_KEYS.VEHICLE_CATALOG + ':admin' : CACHE_KEYS.VEHICLE_CATALOG;
+    const cached = serverCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const client = this.getClient();
+    // 批量查询: 一次取车型 + 一次取所有图片（消除 N+1）
     let query = client.from('vehicle_catalog').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
     if (!admin) query = query.eq('enabled', 1);
-    const { data: rows, error } = await query;
+    const [{ data: rows, error }, { data: allImgs }] = await Promise.all([
+      query,
+      client.from('vehicle_images').select('vehicle_id, url, is_primary, sort_order'),
+    ]);
     if (error) throw new Error(`查询车型失败: ${error.message}`);
 
-    const result = [];
-    for (const v of (rows || [])) {
-      const { data: imgs } = await client.from('vehicle_images').select('url').eq('vehicle_id', v.id).order('is_primary', { ascending: false }).order('sort_order', { ascending: true });
-      (result as any[]).push({
-        id: v.id, name: v.name, fullName: v.full_name, subtitle: v.subtitle,
-        description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
-        sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
-        restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
-        pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
-        images: (imgs || []).map((x: any) => x.url),
-      } as any);
+    // 按车型分组图片
+    const imgMap = new Map<string, string[]>();
+    for (const img of (allImgs || [])) {
+      const list = imgMap.get(img.vehicle_id) || [];
+      list.push(img.url);
+      imgMap.set(img.vehicle_id, list);
     }
+
+    const result = (rows || []).map((v: any) => ({
+      id: v.id, name: v.name, fullName: v.full_name, subtitle: v.subtitle,
+      description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
+      sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
+      restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
+      pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
+      images: imgMap.get(v.id) || [],
+    }));
+
+    serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
     return result;
   }
 
   async getVehicle(id: string) {
+    // 从缓存列表中查找，避免重新查询
     const all = await this.listVehicles(true);
     return (all as any[]).find(v => v.id === id);
   }
@@ -111,20 +127,29 @@ export class OperationsService implements OnModuleInit {
       await client.from('vehicle_catalog').insert({ id, ...values, created_at: t });
     }
     await this.audit(adminId, exists ? 'vehicle.update' : 'vehicle.create', 'vehicle', id, { name: b.name });
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
     return this.getVehicle(id);
   }
 
   async listBanners(admin = false) {
+    const cacheKey = admin ? CACHE_KEYS.BANNERS + ':admin' : CACHE_KEYS.BANNERS;
+    const cached = serverCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const client = this.getClient();
     let query = client.from('content_banners').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
     if (!admin) query = query.eq('enabled', 1);
     const { data: rows, error } = await query;
     if (error) throw new Error(`查询轮播图失败: ${error.message}`);
-    return (rows || []).map((v: any) => ({
+
+    const result = (rows || []).map((v: any) => ({
       id: v.id, image: v.image_url, imageUrl: v.image_url, title: v.title,
       linkType: v.link_type, linkTarget: v.link_target, sortOrder: v.sort_order,
       sort: v.sort_order, enabled: !!v.enabled, createdAt: v.created_at, updatedAt: v.updated_at,
     }));
+
+    serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
+    return result;
   }
 
   async saveBanner(adminId: string, id: string, b: any) {

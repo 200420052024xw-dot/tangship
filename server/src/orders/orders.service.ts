@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { randomUUID } from 'node:crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateOrderInput, OrderStatus, canTransition, ORDER_MODES } from './orders.types';
+import { serverCache, CACHE_TTL, CACHE_KEYS } from '../common/server-cache';
 
 const now = () => new Date().toISOString();
 
@@ -85,14 +86,21 @@ export class OrdersService {
     }
 
     await this.log(id, null, 'pending_review', 'user', userId, '用户提交订车需求');
+    serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
 
   async list(userId: string) {
+    const cacheKey = CACHE_KEYS.ORDERS_PREFIX + userId;
+    const cached = serverCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const { data, error } = await this.getClient().from('orders')
       .select('id, order_no, vehicle_id, status, pickup_type, scheduled_at, scheduled_end_at, created_at')
       .eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw new Error(`查询订单失败: ${error.message}`);
+
+    serverCache.set(cacheKey, data, CACHE_TTL.DYNAMIC);
     return data;
   }
 
@@ -139,6 +147,7 @@ export class OrdersService {
     const { data: updated, error } = await this.getClient().from('orders').update({ status: 'cancelled', updated_at: time }).eq('id', id).eq('user_id', userId).eq('status', order.status).select().maybeSingle();
     if (error || !updated) throw new ConflictException('订单状态已变化，请刷新后重试');
     await this.log(id, order.status, 'cancelled', 'user', userId, '用户取消');
+    serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
 
@@ -203,6 +212,7 @@ export class OrdersService {
     });
     if (insertErr) throw new Error(`创建支付记录失败: ${insertErr.message}`);
     await this.log(id, 'pending_payment', 'paid', 'user', userId, '模拟支付成功');
+    serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
 
@@ -212,6 +222,8 @@ export class OrdersService {
       internal_note: String(data.internalNote || '') || null,
       user_note: String(data.userNote || '') || null,
     }).eq('id', id);
+    serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
+    serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
     return result;
   }
 

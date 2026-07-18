@@ -8,9 +8,20 @@ const superOnly = (req: any) => { if (req.admin.role !== 'super_admin') throw ne
 @Controller('content')
 export class PublicContentController {
   constructor(private service: OperationsService) {}
-  @Get('vehicles') async vehicles() { return { code: 200, msg: 'success', data: await this.service.listVehicles() }; }
+  @Get('vehicles') async vehicles(@Req() req: any) {
+    const data = await this.service.listVehicles();
+    // 列表页精简: 只返回首图，去掉大图数组，大幅减少 payload
+    const lite = data.map((v: any) => ({
+      ...v, images: v.images?.length ? [v.images[0]] : [],
+    }));
+    req.res?.setHeader('Cache-Control', 'public, max-age=120');
+    return { code: 200, msg: 'success', data: lite };
+  }
   @Get('vehicles/:id') async vehicle(@Param('id') id: string) { return { code: 200, msg: 'success', data: await this.service.getVehicle(id) }; }
-  @Get('banners') async banners() { return { code: 200, msg: 'success', data: await this.service.listBanners() }; }
+  @Get('banners') async banners(@Req() req: any) {
+    req.res?.setHeader('Cache-Control', 'public, max-age=120');
+    return { code: 200, msg: 'success', data: await this.service.listBanners() };
+  }
 }
 
 @Controller('admin/operations')

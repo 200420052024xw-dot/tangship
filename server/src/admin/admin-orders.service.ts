@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { serverCache, CACHE_TTL, CACHE_KEYS } from '../common/server-cache';
 
 const STATUSES = new Set(['pending_review', 'rejected', 'pending_payment', 'quote_expired', 'paid', 'dispatching', 'delivering', 'completed', 'cancelled', 'refund_pending', 'refunded']);
 const mask = (v: string) => v?.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') || '';
@@ -11,6 +12,9 @@ export class AdminOrdersService {
   private getClient() { return this.supabase.getClient(); }
 
   async dashboard() {
+    const cached = serverCache.get<any>(CACHE_KEYS.ADMIN_DASHBOARD);
+    if (cached) return cached;
+
     const client = this.getClient();
     const start = new Date(); start.setUTCHours(0, 0, 0, 0);
     const count = async (filter: string) => {
@@ -19,13 +23,15 @@ export class AdminOrdersService {
     };
     const { count: todayNew } = await client.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', start.toISOString());
     const recentPending = await this.list({ status: 'pending_review', page: 1, pageSize: 5 });
-    return {
+    const result = {
       pendingReview: await count('pending_review'),
       pendingPayment: await count('pending_payment'),
       todayNew: todayNew || 0,
       rejected: await count('rejected'),
       recentPending: recentPending.items,
     };
+    serverCache.set(CACHE_KEYS.ADMIN_DASHBOARD, result, CACHE_TTL.DYNAMIC);
+    return result;
   }
 
   async list(q: any) {

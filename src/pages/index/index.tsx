@@ -13,7 +13,7 @@
  */
 
 import { Image, View, Text, Swiper, SwiperItem } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import {
@@ -25,33 +25,24 @@ import {
 } from '@/components/vehicle/ServiceModeSwitcher'
 import type { BannerItem } from '@/data/banners'
 import type { Vehicle } from '@/types/vehicle'
-import { Network } from '@/network'
+import { useSWR } from '@/stores/data-cache'
+import { consumerRequest } from '@/services/consumer-api'
 import { Skeleton } from '@/components/ui/skeleton'
 import './index.css'
 
 const IndexPage: FC = () => {
   const [activeTab, setActiveTab] = useState<ServiceMode>('single')
   const [currentBanner, setCurrentBanner] = useState(0)
-  const [catalog, setCatalog] = useState<Vehicle[]>([])
-  const [banners, setBanners] = useState<BannerItem[]>([])
-  const [loadingCatalog, setLoadingCatalog] = useState(true)
+  const { data: catalog, loading: loadingCatalog } = useSWR<Vehicle[]>(
+    'vehicles', () => consumerRequest({ url: '/api/content/vehicles' }), 'static'
+  )
+  const { data: banners } = useSWR<BannerItem[]>(
+    'banners', () => consumerRequest({ url: '/api/content/banners' }), 'static'
+  )
 
-  const vehicles = catalog.filter(vehicle => activeTab === 'rental'
+  const vehicles = (catalog || []).filter(vehicle => activeTab === 'rental'
     ? vehicle.supportedModes.some(mode => mode === 'rental' || mode === 'purchase')
     : vehicle.supportedModes.includes(activeTab))
-  useEffect(() => {
-    Promise.all([
-      Network.request({ url: '/api/content/vehicles' }),
-      Network.request({ url: '/api/content/banners' }),
-    ]).then(([vehicleResponse, bannerResponse]) => {
-      const vehicleData = (vehicleResponse.data as any)?.data
-      const bannerData = (bannerResponse.data as any)?.data
-      setCatalog((vehicleData || []) as Vehicle[])
-      setBanners((bannerData || []) as BannerItem[])
-    }).catch(() => {
-      Taro.showToast({ title: '车型数据加载失败', icon: 'none' })
-    }).finally(() => setLoadingCatalog(false))
-  }, [])
 
   /** 轮播图背景颜色 */
   const getBannerColor = (bannerId: string): string => {
@@ -79,7 +70,7 @@ const IndexPage: FC = () => {
   const handleBannerClick = (banner: BannerItem) => {
     switch (banner.linkType) {
       case 'vehicle': {
-        const target = catalog.find(v => v.id === banner.linkTarget)
+        const target = (catalog || []).find(v => v.id === banner.linkTarget)
         if (target) {
           handleVehicleClick(target)
         } else {
@@ -103,19 +94,19 @@ const IndexPage: FC = () => {
   return (
     <View className="min-h-screen bg-slate-50">
       {/* 轮播图 */}
-      {banners.length > 0 && (
+      {(banners || []).length > 0 && (
         <View className="w-full relative overflow-hidden">
           <Swiper
             className="w-full h-48"
-            indicatorDots={banners.length > 1}
-            autoplay={banners.length > 1}
+            indicatorDots={(banners || []).length > 1}
+            autoplay={(banners || []).length > 1}
             interval={3000}
             duration={500}
-            circular={banners.length > 1}
+            circular={(banners || []).length > 1}
             current={currentBanner}
             onChange={(e) => setCurrentBanner(e.detail.current)}
           >
-            {banners.map(banner => (
+            {(banners || []).map(banner => (
               <SwiperItem key={banner.id} onClick={() => handleBannerClick(banner)}>
                 <View
                   className="w-full h-48 relative flex items-center justify-center"
