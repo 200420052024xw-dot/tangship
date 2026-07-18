@@ -1,9 +1,8 @@
 import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Send, MapPin } from 'lucide-react-taro'
+import { Package, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Truck, MapPin, ChevronRight } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 
@@ -14,36 +13,36 @@ type Order = {
   quote?: { totalCents: number }
 }
 
-const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Clock3 }> = {
-  pending_review:  { label: '待确认',  color: 'text-amber-600',  bg: 'bg-amber-50',   icon: Hourglass },
-  pending_payment: { label: '待支付',  color: 'text-blue-600',   bg: 'bg-blue-50',    icon: Wallet },
-  paid:            { label: '已支付',  color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CircleCheck },
-  rejected:        { label: '已拒绝',  color: 'text-red-500',    bg: 'bg-red-50',     icon: CircleX },
-  cancelled:       { label: '已取消',  color: 'text-slate-400',  bg: 'bg-slate-100',  icon: Ban },
-  quote_expired:   { label: '报价过期', color: 'text-orange-500', bg: 'bg-orange-50',  icon: Clock3 },
-  dispatching:     { label: '调度中',  color: 'text-violet-600', bg: 'bg-violet-50',  icon: Loader },
-  delivering:      { label: '配送中',  color: 'text-indigo-600', bg: 'bg-indigo-50',  icon: Truck },
-  completed:       { label: '已完成',  color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CircleCheck },
+/* ── 统一状态配置：蓝色系=进行中，绿色=完成，灰色=终态 ── */
+const statusConfig: Record<string, { label: string; color: string; bg: string; dotColor: string; icon: typeof Clock3 }> = {
+  pending_review:  { label: '待确认',  color: 'text-amber-700',  bg: 'bg-amber-50',   dotColor: '#f59e0b', icon: Hourglass },
+  pending_payment: { label: '待支付',  color: 'text-blue-700',   bg: 'bg-blue-50',    dotColor: '#3b82f6', icon: Wallet },
+  paid:            { label: '已支付',  color: 'text-blue-700',   bg: 'bg-blue-50',    dotColor: '#3b82f6', icon: CircleCheck },
+  dispatching:     { label: '调度中',  color: 'text-blue-700',   bg: 'bg-blue-50',    dotColor: '#3b82f6', icon: Loader },
+  delivering:      { label: '配送中',  color: 'text-blue-700',   bg: 'bg-blue-50',    dotColor: '#3b82f6', icon: Truck },
+  completed:       { label: '已完成',  color: 'text-emerald-700', bg: 'bg-emerald-50', dotColor: '#10b981', icon: CircleCheck },
+  rejected:        { label: '已拒绝',  color: 'text-slate-500',  bg: 'bg-slate-100',  dotColor: '#94a3b8', icon: CircleX },
+  cancelled:       { label: '已取消',  color: 'text-slate-500',  bg: 'bg-slate-100',  dotColor: '#94a3b8', icon: Ban },
+  quote_expired:   { label: '报价过期', color: 'text-slate-500', bg: 'bg-slate-100',  dotColor: '#94a3b8', icon: Clock3 },
 }
 
-const modeLabels: Record<string, string> = { single: '单趟配送', monthly: '企业包月', rental: '短租体验', purchase: '整车购买' }
+const modeLabels: Record<string, string> = { single: '散单', monthly: '包月', rental: '租购', purchase: '购买' }
 
-function formatTime(iso: string) {
+function formatRelative(iso: string) {
   const d = new Date(iso)
   const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
+  const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000)
   if (diffMin < 1) return '刚刚'
   if (diffMin < 60) return `${diffMin}分钟前`
   const diffH = Math.floor(diffMin / 60)
   if (diffH < 24) return `${diffH}小时前`
   const diffD = Math.floor(diffH / 24)
   if (diffD < 7) return `${diffD}天前`
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
 function formatCents(cents: number) {
-  return `¥${(cents / 100).toFixed(2)}`
+  return `¥${(cents / 100).toFixed(0)}`
 }
 
 export default function OrdersPage() {
@@ -55,72 +54,86 @@ export default function OrdersPage() {
   const orderList = orders || []
 
   return (
-    <View className="min-h-screen bg-slate-50">
+    <View className="min-h-screen bg-gray-100">
       {/* 顶部栏 */}
-      <View className="bg-white px-4 pt-4 pb-3 border-b border-slate-100">
-        <Text className="block text-xl font-semibold text-slate-800">我的订单</Text>
-        {!loading && <Text className="block text-xs text-slate-400 mt-1">共 {orderList.length} 条</Text>}
+      <View className="bg-white px-5 pt-5 pb-4">
+        <Text className="block text-xl font-bold text-slate-800">我的订单</Text>
+        {!loading && <Text className="block text-xs text-slate-400 mt-1">共 {orderList.length} 条记录</Text>}
       </View>
 
       {loading ? (
         <View className="p-4 space-y-3">
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-36 rounded-2xl" />
+          <Skeleton className="h-36 rounded-2xl" />
         </View>
       ) : !orderList.length ? (
-        <View className="flex flex-col items-center justify-center pt-24">
-          <Send size={48} color="#94a3b8" />
-          <Text className="block text-slate-400 mt-4">暂无订单</Text>
-          <Text className="block text-xs text-slate-300 mt-1">去首页选择车型开始下单</Text>
+        <View className="flex flex-col items-center justify-center pt-28">
+          <Package size={56} color="#cbd5e1" />
+          <Text className="block text-slate-400 mt-4 text-base">暂无订单</Text>
+          <Text className="block text-xs text-slate-300 mt-2">去首页选择车型开始下单</Text>
         </View>
       ) : (
-        <View className="p-4 space-y-3">
+        <View className="px-4 pt-3 space-y-3 pb-24">
           {orderList.map(order => {
-            const sc = statusConfig[order.status] || { label: order.status, color: 'text-slate-500', bg: 'bg-slate-50', icon: Clock3 }
-            const StatusIcon = sc.icon
+            const sc = statusConfig[order.status] || { label: order.status, color: 'text-slate-500', bg: 'bg-slate-50', dotColor: '#94a3b8', icon: Clock3 }
+            const isActive = ['pending_review', 'pending_payment', 'paid', 'dispatching', 'delivering'].includes(order.status)
             return (
-              <Card key={order.id} onClick={() => Taro.navigateTo({ url: `/pages/order/detail/index?id=${order.id}` }).catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))}>
-                <CardContent className="p-4">
-                  {/* 第一行：单号 + 状态 */}
+              <View
+                key={order.id}
+                className="bg-white rounded-2xl overflow-hidden"
+                style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+                onClick={() => Taro.navigateTo({ url: `/pages/order/detail/index?id=${order.id}` }).catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))}
+              >
+                {/* 顶部色条 - 进行中蓝色，已完成绿色，终态灰色 */}
+                <View className={`h-1 ${isActive ? 'bg-blue-500' : order.status === 'completed' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+
+                <View className="px-4 pt-3 pb-3">
+                  {/* 第一行：订单号 + 状态标签 */}
                   <View className="flex flex-row items-center justify-between">
-                    <Text className="block text-sm font-medium text-slate-700">{order.orderNo}</Text>
-                    <View className="flex flex-row items-center gap-1">
-                      <StatusIcon size={14} color={sc.color === 'text-amber-600' ? '#d97706' : sc.color === 'text-blue-600' ? '#2563eb' : sc.color === 'text-emerald-600' ? '#059669' : sc.color === 'text-red-500' ? '#ef4444' : sc.color === 'text-violet-600' ? '#7c3aed' : sc.color === 'text-indigo-600' ? '#4f46e5' : sc.color === 'text-orange-500' ? '#f97316' : '#94a3b8'} />
-                      <Badge className={`${sc.bg} ${sc.color} border-0`}>{sc.label}</Badge>
+                    <Text className="block text-xs text-slate-400">{order.orderNo}</Text>
+                    <View className={`${sc.bg} px-2 py-0.5 rounded-full flex flex-row items-center gap-1`}>
+                      <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sc.dotColor }} />
+                      <Text className={`block text-xs font-medium ${sc.color}`}>{sc.label}</Text>
                     </View>
                   </View>
 
-                  {/* 第二行：地址信息 */}
-                  <View className="mt-3 flex flex-row items-start gap-2">
-                    <View className="flex flex-col items-center gap-1 pt-1">
-                      <Send size={12} color="#059669" />
-                      <View className="w-1 h-4 bg-slate-200" />
-                      <MapPin size={12} color="#2563eb" />
+                  {/* 地址流：发货 → 收货 */}
+                  <View className="mt-3 flex flex-row items-start">
+                    {/* 竖线装饰 */}
+                    <View className="flex flex-col items-center mr-3 pt-1">
+                      <View className="w-2 h-2 rounded-full bg-blue-500" style={{ borderWidth: 2, borderColor: '#bfdbfe' }} />
+                      <View className="w-0.5 h-5 bg-slate-200" />
+                      <MapPin size={12} color="#ef4444" />
                     </View>
                     <View className="flex-1 min-w-0">
-                      <Text className="block text-xs text-slate-600 truncate">{order.sender?.formattedAddress || '寄件地址'}</Text>
-                      <Text className="block text-xs text-slate-600 mt-2 truncate">{order.receiver?.formattedAddress || '收件地址'}</Text>
+                      <Text className="block text-sm text-slate-700 truncate">{order.sender?.formattedAddress || '寄件地址'}</Text>
+                      <Text className="block text-sm text-slate-700 mt-3 truncate">{order.receiver?.formattedAddress || '收件地址'}</Text>
                     </View>
                   </View>
 
-                  {/* 第三行：车型+模式+费用+时间 */}
+                  {/* 底部：车型+模式 | 价格+时间 */}
                   <View className="mt-3 flex flex-row items-center justify-between">
                     <View className="flex flex-row items-center gap-2">
-                      <Truck size={14} color="#64748b" />
+                      <Truck size={13} color="#94a3b8" />
                       <Text className="block text-xs text-slate-500">{order.vehicleId}</Text>
-                      <View className="px-2 py-1 bg-slate-100 rounded">
-                        <Text className="text-[10px] text-slate-500">{modeLabels[order.mode] || order.mode}</Text>
+                      <View className="px-1.5 py-0.5 bg-slate-100 rounded">
+                        <Text className="text-[10px] text-slate-400">{modeLabels[order.mode] || order.mode}</Text>
                       </View>
                     </View>
-                    <View className="flex flex-row items-center gap-3">
+                    <View className="flex flex-row items-center gap-2">
                       {order.quote?.totalCents != null && (
-                        <Text className="block text-sm font-semibold text-blue-600">{formatCents(order.quote.totalCents)}</Text>
+                        <Text className="block text-base font-bold text-blue-600">{formatCents(order.quote.totalCents)}</Text>
                       )}
-                      <Text className="block text-xs text-slate-400">{formatTime(order.createdAt)}</Text>
                     </View>
                   </View>
-                </CardContent>
-              </Card>
+
+                  {/* 最底部时间 */}
+                  <View className="mt-2 flex flex-row items-center justify-between">
+                    <Text className="block text-[10px] text-slate-300">{formatRelative(order.createdAt)}</Text>
+                    <ChevronRight size={14} color="#cbd5e1" />
+                  </View>
+                </View>
+              </View>
             )
           })}
         </View>
