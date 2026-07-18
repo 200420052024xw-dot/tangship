@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { randomUUID } from 'node:crypto'
 import { DatabaseService } from '../database/database.service'
-import { CreateOrderInput, OrderStatus, canTransition } from './orders.types'
+import { CreateOrderInput, OrderStatus, canTransition, ORDER_MODES } from './orders.types'
 
 const now = () => new Date().toISOString()
 @Injectable()
@@ -13,7 +13,7 @@ export class OrdersService {
     const vehicle = this.database.db.prepare('SELECT enabled,modes_json modesJson,specs_json specsJson FROM vehicle_catalog WHERE id=?').get(data.vehicleId) as any
     if (!vehicle || !vehicle.enabled) throw new BadRequestException('车型不存在或已下架')
     const modes = JSON.parse(vehicle.modesJson || '[]') as string[]
-    if (data.mode !== 'single' || !modes.includes(data.mode)) throw new BadRequestException('该车型不支持当前业务模式，请重新选择')
+    if (!ORDER_MODES.includes(data.mode as any) || !modes.includes(data.mode)) throw new BadRequestException('该车型不支持当前业务模式，请重新选择')
     const normalized = (address: CreateOrderInput['sender']) => [address.contactName, address.phone, address.formattedAddress, address.detailAddress, address.longitude, address.latitude].map(value => String(value).trim().toLowerCase()).join('|')
     if (normalized(data.sender) === normalized(data.receiver)) throw new BadRequestException('寄件地址与收件地址不能完全相同')
     const maxLoadKg = Number(JSON.parse(vehicle.specsJson || '{}').maxLoadKg || 0)
@@ -80,7 +80,7 @@ export class OrdersService {
     return this.adminDetail(id)
   }
 
-  validatePayment(userId: string, id: string, amountCents: number) { const order = this.detail(userId, id) as any; if (order.status !== 'pending_payment') throw new ConflictException('订单不是待支付状态'); if (!order.quote || new Date(order.quote.expires_at) <= new Date()) { const changed = this.database.db.prepare("UPDATE orders SET status='quote_expired',updated_at=? WHERE id=? AND status='pending_payment'").run(now(), id); if (changed.changes === 1) this.log(id, 'pending_payment', 'quote_expired', 'system', 'system', '报价过期'); throw new ConflictException('报价已过期') } if (amountCents !== order.quote.total_cents) throw new ForbiddenException('支付金额必须等于有效报价'); throw new ConflictException('支付功能待接入') }
+  validatePayment(userId: string, id: string, amountCents: number) { const order = this.detail(userId, id) as any; if (order.status !== 'pending_payment') throw new ConflictException('订单不是待支付状态'); if (!order.quote || new Date(order.quote.expires_at) <= new Date()) { const changed = this.database.db.prepare("UPDATE orders SET status='quote_expired',updated_at=? WHERE id=? AND status='pending_payment'").run(now(), id); if (changed.changes === 1) this.log(id, 'pending_payment', 'quote_expired', 'system', 'system', '报价过期'); throw new ConflictException('报价已过期') } if (amountCents !== order.quote.total_cents) throw new ForbiddenException('支付金额必须等于有效报价'); const time = now(), paymentId = randomUUID(); this.database.db.transaction(() => { const result = this.database.db.prepare("UPDATE orders SET status='paid',updated_at=? WHERE id=? AND status='pending_payment'").run(time, id); if (result.changes !== 1) throw new ConflictException('订单状态已变化，请刷新后重试'); this.database.db.prepare('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?)').run(paymentId, id, amountCents, 'mock', 'success', null, time, time); this.log(id, 'pending_payment', 'paid', 'user', userId, '模拟支付成功'); })(); return this.detail(userId, id) }
   reviewWithNotes(adminId: string, id: string, data: any) { return this.database.db.transaction(() => { const result = this.review(adminId, id, data); this.database.db.prepare('UPDATE orders SET internal_note=?,user_note=? WHERE id=?').run(String(data.internalNote || '') || null, String(data.userNote || '') || null, id); return result })() }
   private log(orderId: string, from: string | null, to: string, operatorType: string, operatorId: string, remark: string) { this.database.db.prepare('INSERT INTO order_status_logs VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(), orderId, from, to, operatorType, operatorId, remark, now()) }
   private audit(adminId: string, action: string, id: string, detail: unknown) { this.database.db.prepare('INSERT INTO audit_logs VALUES(?,?,?,?,?,?,?)').run(randomUUID(), adminId, action, 'order', id, JSON.stringify(detail), now()) }

@@ -1,2 +1,2 @@
-import { Module } from '@nestjs/common';import { VehiclesModule } from '../vehicles/vehicles.module';import { AdminAuthGuard } from '../auth/auth';import { AdminOperationsController,PublicContentController } from './operations.controller';import { OperationsService } from './operations.service';
-@Module({imports:[VehiclesModule],controllers:[PublicContentController,AdminOperationsController],providers:[OperationsService,AdminAuthGuard],exports:[OperationsService]})export class OperationsModule{}
+import { Module } from '@nestjs/common';import { AdminAuthGuard } from '../auth/auth';import { AdminOperationsController,PublicContentController } from './operations.controller';import { OperationsService } from './operations.service';
+@Module({imports:[],controllers:[PublicContentController,AdminOperationsController],providers:[OperationsService,AdminAuthGuard],exports:[OperationsService]})export class OperationsModule{}

@@ -69,18 +69,18 @@ const OrderCreatePage: FC = () => {
   const [errors, setErrors] = useState<OrderDraftErrors>({})
   const [activeSection, setActiveSection] = useState<string>(SECTION_IDS.vehicle)
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
-  const requestedModeSupported = modeParam === 'single'
+  const modeSupported = vehicle ? vehicle.supportedModes.includes(modeParam) : true
 
   // 进入页面:同步模式;若无车型则尝试从 URL 注入(仅在刚下单时)
   useEffect(() => {
-    if (!requestedModeSupported) {
-      Taro.showToast({ title: '当前业务模式暂不支持下单，请重新选择', icon: 'none' })
+    if (!modeSupported) {
+      Taro.showToast({ title: '该车型不支持当前业务模式，请重新选择', icon: 'none' })
       return
     }
     if (modeParam !== draft.mode) {
       setMode(modeParam)
     }
-  }, [modeParam, draft.mode, requestedModeSupported, setMode])
+  }, [modeParam, draft.mode, modeSupported, setMode])
 
   useEffect(() => {
     if (!draft.vehicleId) { setVehicle(null); return }
@@ -135,7 +135,7 @@ const OrderCreatePage: FC = () => {
   const validate = (): OrderDraftErrors => {
     const next: OrderDraftErrors = {}
     if (!vehicle) next.vehicleId = '请选择车型'
-    else if (!requestedModeSupported || !vehicle.supportedModes.includes(modeParam)) next.vehicleId = '该车型不支持当前业务模式，请重新选择'
+    else if (!modeSupported || !vehicle.supportedModes.includes(modeParam)) next.vehicleId = '该车型不支持当前业务模式，请重新选择'
     if (!draft.senderAddress) next.senderAddress = '请选择寄件地址'
     if (!draft.receiverAddress) next.receiverAddress = '请选择收件地址'
     if (draft.senderAddress && draft.receiverAddress && addressesEqual(draft.senderAddress, draft.receiverAddress)) {

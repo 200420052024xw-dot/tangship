@@ -4,5 +4,5 @@ import { Body, Controller, Get, Headers, HttpCode, Param, Post, Req, UseGuards }
  @Get() list(@Req() req:any){return {code:200,msg:'success',data:this.orders.list(req.user.id)}}
  @Get(':id') detail(@Req() req:any,@Param('id') id:string){return {code:200,msg:'success',data:this.orders.detail(req.user.id,id)}}
  @Post(':id/cancel') @HttpCode(200) cancel(@Req() req:any,@Param('id') id:string){return {code:200,msg:'订单已取消',data:this.orders.cancel(req.user.id,id)}}
- @Post(':id/pay') @HttpCode(200) pay(@Req() req:any,@Param('id') id:string,@Body() body:{amountCents:number}){return this.orders.validatePayment(req.user.id,id,body.amountCents)}
+ @Post(':id/pay') @HttpCode(200) pay(@Req() req:any,@Param('id') id:string,@Body() body:{amountCents:number}){return {code:200,msg:'支付成功',data:this.orders.validatePayment(req.user.id,id,body.amountCents)}}
 }
