@@ -204,6 +204,7 @@ export const vehicleCatalog = pgTable("vehicle_catalog", {
   scenes_json: text("scenes_json").notNull(),
   restrictions_json: text("restrictions_json").notNull(),
   modes_json: text("modes_json").notNull(),
+  service_mode: varchar("service_mode", { length: 20 }).notNull().default('single'),
   pricing_hint_json: text("pricing_hint_json").notNull(),
   tags_json: text("tags_json").notNull(),
   enabled: boolean("enabled").notNull().default(true),
@@ -211,7 +212,9 @@ export const vehicleCatalog = pgTable("vehicle_catalog", {
   sort_order: integer("sort_order").notNull().default(0),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, t => [
+  index("vehicle_catalog_service_mode_idx").on(t.service_mode),
+]);
 
 export const vehicleImages = pgTable("vehicle_images", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -248,4 +251,41 @@ export const pricingRuleVersions = pgTable("pricing_rule_versions", {
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   published_at: timestamp("published_at", { withTimezone: true }),
+});
+
+// ─── Inquiries (包月专线 & 租购服务咨询) ───
+export const inquiries = pgTable("inquiries", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  type: varchar("type", { length: 20 }).notNull(), // 'monthly' | 'rental'
+  vehicle_id: varchar("vehicle_id", { length: 36 }), // 选填，选车后才填
+  // 包月专线字段
+  sender_address: text("sender_address"),    // 发货地址 JSON
+  receiver_address: text("receiver_address"), // 收货地址 JSON
+  cargo_type: varchar("cargo_type", { length: 64 }),     // 货物类型
+  delivery_cycle: varchar("delivery_cycle", { length: 64 }), // 配送周期
+  monthly_trips: integer("monthly_trips"),   // 每月预计配送次数
+  // 共通字段
+  contact_name: varchar("contact_name", { length: 64 }).notNull(),
+  phone: varchar("phone", { length: 32 }).notNull(),
+  company_name: varchar("company_name", { length: 128 }), // 选填
+  consult_content: text("consult_content"),  // 租购咨询内容，选填
+  // 状态
+  status: varchar("status", { length: 20 }).notNull().default('pending'), // pending | contacted | closed
+  note: text("note"), // 管理员备注
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  index("inquiries_type_idx").on(t.type),
+  index("inquiries_status_idx").on(t.status),
+]);
+
+// ─── Contact Settings (客服联系方式，管理员可编辑) ───
+export const contactSettings = pgTable("contact_settings", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  phone: varchar("phone", { length: 32 }).notNull().default(''),
+  wechat: varchar("wechat", { length: 64 }).notNull().default(''),
+  email: varchar("email", { length: 128 }).notNull().default(''),
+  work_time: varchar("work_time", { length: 128 }).notNull().default('工作日 9:00-18:00'),
+  extra_text: text("extra_text").notNull().default(''), // 额外提示文字
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

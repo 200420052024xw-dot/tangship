@@ -33,6 +33,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 25,
@@ -87,6 +88,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 45,
@@ -140,6 +142,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 35,
@@ -191,6 +194,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 40,
@@ -244,6 +248,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 65,
@@ -298,6 +303,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 80,
@@ -353,6 +359,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含基础里程与冷链附加费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 55,
@@ -413,6 +420,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含基础里程与冷链附加费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 90,
@@ -471,6 +479,7 @@ export const CANONICAL_VEHICLES = [
       "single",
       "monthly"
     ],
+    "serviceMode": "single",
     "pricingDescription": {
       "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
       "startFrom": 50,
@@ -517,6 +526,7 @@ export const CANONICAL_VEHICLES = [
       "rental",
       "purchase"
     ],
+    "serviceMode": "rental",
     "pricingDescription": {
       "description": "整车采购一次性付款,具体报价请联系销售。最终费用以合同为准。",
       "startFrom": 85000,
@@ -560,6 +570,7 @@ export const CANONICAL_VEHICLES = [
       "rental",
       "purchase"
     ],
+    "serviceMode": "rental",
     "pricingDescription": {
       "description": "租赁按月计费,采购为一次性付款。具体报价请联系销售。",
       "startFrom": 5000,
@@ -608,6 +619,7 @@ export const CANONICAL_VEHICLES = [
       "rental",
       "purchase"
     ],
+    "serviceMode": "rental",
     "pricingDescription": {
       "description": "租赁按月计费,采购为一次性付款。具体报价请联系销售。",
       "startFrom": 4500,
@@ -653,6 +665,7 @@ export const CANONICAL_VEHICLES = [
     "supportedModes": [
       "purchase"
     ],
+    "serviceMode": "rental",
     "pricingDescription": {
       "description": "套件采购一次性付款,具体型号与价格请联系销售。",
       "startFrom": 38000,
@@ -667,6 +680,85 @@ export const CANONICAL_VEHICLES = [
       "套件",
       "改装"
     ],
+    "enabled": true
+  },
+  // ─── Monthly dedicated line vehicles ───
+  {
+    "id": "z2-monthly",
+    "name": "Z2",
+    "fullName": "Z2 包月专线车",
+    "subtitle": "紧凑型无人配送车,适合短距离高频次包月配送",
+    "description": "小巧灵活,适合社区末端配送与小件高频次运输场景,包月专线专用。",
+    "images": [],
+    "specs": {
+      "cargoVolume": "1.5m³",
+      "maxLoadKg": 200,
+      "maxRangeKm": 80,
+      "speedKmh": "15-25",
+      "chargeTime": "2小时快充"
+    },
+    "applicableScenes": ["城市末端配送", "社区快递", "生鲜配送", "小件货物"],
+    "restrictions": ["禁运危险化学品", "禁运易燃易爆物品"],
+    "supportedModes": ["monthly"],
+    "serviceMode": "monthly",
+    "pricingDescription": {
+      "description": "按月计费,包含基础配送次数,超出次数按单次加收。",
+      "startFrom": 2800,
+      "breakdown": [{"label": "月费(含基础次数)", "amount": 2800}]
+    },
+    "tags": ["包月", "紧凑型"],
+    "enabled": true
+  },
+  {
+    "id": "z5-2026-monthly",
+    "name": "Z5",
+    "fullName": "Z5 包月专线车",
+    "subtitle": "中型无人配送车,适合中距离常规配送",
+    "description": "均衡型配送车,适合园区、校园、商业区等场景的包月专线服务。",
+    "images": [],
+    "specs": {
+      "cargoVolume": "2.5m³",
+      "maxLoadKg": 500,
+      "maxRangeKm": 120,
+      "speedKmh": "15-25",
+      "chargeTime": "3小时快充"
+    },
+    "applicableScenes": ["园区配送", "校园物流", "商超配送", "餐饮外卖"],
+    "restrictions": ["禁运危险化学品", "单件重量不超过500kg"],
+    "supportedModes": ["monthly"],
+    "serviceMode": "monthly",
+    "pricingDescription": {
+      "description": "按月计费,包含基础配送次数,超出次数按单次加收。",
+      "startFrom": 4500,
+      "breakdown": [{"label": "月费(含基础次数)", "amount": 4500}]
+    },
+    "tags": ["包月", "中型"],
+    "enabled": true
+  },
+  {
+    "id": "l5-monthly",
+    "name": "L5",
+    "fullName": "L5 包月专线车",
+    "subtitle": "大型无人配送车,适合长距离大运量配送",
+    "description": "大容量配送车,适合跨区、干线等大运量包月专线场景。",
+    "images": [],
+    "specs": {
+      "cargoVolume": "5m³",
+      "maxLoadKg": 1000,
+      "maxRangeKm": 150,
+      "speedKmh": "20-30",
+      "chargeTime": "4小时快充"
+    },
+    "applicableScenes": ["跨区配送", "干线物流", "批发配送", "大件货物"],
+    "restrictions": ["禁运危险化学品", "单件重量不超过1000kg"],
+    "supportedModes": ["monthly"],
+    "serviceMode": "monthly",
+    "pricingDescription": {
+      "description": "按月计费,包含基础配送次数,超出次数按单次加收。",
+      "startFrom": 6800,
+      "breakdown": [{"label": "月费(含基础次数)", "amount": 6800}]
+    },
+    "tags": ["包月", "大型"],
     "enabled": true
   }
 ] as const

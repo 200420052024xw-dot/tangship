@@ -36,6 +36,7 @@ export class OperationsService implements OnModuleInit {
           id: v.id, name: v.name, full_name: v.fullName, subtitle: v.subtitle,
           description: v.description, specs_json: json(v.specs), scenes_json: json(v.applicableScenes),
           restrictions_json: json(v.restrictions), modes_json: json(v.supportedModes),
+          service_mode: v.serviceMode || 'single',
           pricing_hint_json: json(v.pricingDescription), tags_json: json(v.tags),
           enabled: v.enabled ? 1 : 0, requires_approval: v.requiresApproval ? 1 : 0,
           sort_order: sort, created_at: t, updated_at: t,
@@ -64,8 +65,8 @@ export class OperationsService implements OnModuleInit {
     }
   }
 
-  async listVehicles(admin = false) {
-    const cacheKey = admin ? CACHE_KEYS.VEHICLE_CATALOG + ':admin' : CACHE_KEYS.VEHICLE_CATALOG;
+  async listVehicles(admin = false, serviceMode?: string) {
+    const cacheKey = (admin ? CACHE_KEYS.VEHICLE_CATALOG + ':admin' : CACHE_KEYS.VEHICLE_CATALOG) + (serviceMode ? `:${serviceMode}` : '');
     const cached = serverCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
@@ -73,6 +74,7 @@ export class OperationsService implements OnModuleInit {
     // 批量查询: 一次取车型 + 一次取所有图片（消除 N+1）
     let query = client.from('vehicle_catalog').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
     if (!admin) query = query.eq('enabled', 1);
+    if (serviceMode) query = query.eq('service_mode', serviceMode);
     const [{ data: rows, error }, { data: allImgs }] = await Promise.all([
       query,
       client.from('vehicle_images').select('vehicle_id, url, is_primary, sort_order'),
@@ -92,6 +94,7 @@ export class OperationsService implements OnModuleInit {
       description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
       sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
       restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
+      serviceMode: v.service_mode || 'single',
       pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
       images: imgMap.get(v.id) || [],
     }));
@@ -116,7 +119,8 @@ export class OperationsService implements OnModuleInit {
       name: b.name, full_name: b.fullName, subtitle: b.subtitle || '',
       description: b.description || '', specs_json: json(b.specs || {}),
       scenes_json: json(b.applicableScenes || []), restrictions_json: json(b.restrictions || []),
-      modes_json: json(b.supportedModes || ['single']), pricing_hint_json: json(b.pricingDescription || {}),
+      modes_json: json(b.supportedModes || ['single']), service_mode: b.serviceMode || 'single',
+      pricing_hint_json: json(b.pricingDescription || {}),
       tags_json: json(b.tags || []), enabled: b.enabled === false ? 0 : 1,
       requires_approval: b.requiresApproval ? 1 : 0, sort_order: Number(b.sortOrder) || 0, updated_at: t,
     };
@@ -335,5 +339,122 @@ export class OperationsService implements OnModuleInit {
       id: randomUUID(), admin_user_id: adminId, action, target_type: type,
       target_id: id, detail: json(detail), created_at: utc(),
     });
+  }
+
+  // ─── Inquiries ───
+  async submitInquiry(data: any) {
+    if (!data.type || !['monthly', 'rental'].includes(data.type))
+      throw new BadRequestException('咨询类型无效');
+    if (!data.contactName || !data.phone)
+      throw new BadRequestException('姓名和电话为必填');
+    if (data.type === 'monthly' && (!data.senderAddress || !data.receiverAddress))
+      throw new BadRequestException('包月专线需填写收发货地址');
+
+    const client = this.getClient();
+    const t = utc();
+    const id = randomUUID();
+    const values: any = {
+      id, type: data.type, contact_name: data.contactName, phone: data.phone,
+      company_name: data.companyName || null, vehicle_id: data.vehicleId || null,
+      consult_content: data.consultContent || null,
+      status: 'pending', created_at: t, updated_at: t,
+    };
+    if (data.type === 'monthly') {
+      values.sender_address = json(data.senderAddress || {});
+      values.receiver_address = json(data.receiverAddress || {});
+      values.cargo_type = data.cargoType || null;
+      values.delivery_cycle = data.deliveryCycle || null;
+      values.monthly_trips = data.monthlyTrips || null;
+    }
+    const { error } = await client.from('inquiries').insert(values);
+    if (error) throw new Error(`提交咨询失败: ${error.message}`);
+    return { id };
+  }
+
+  async listInquiries(page = 1, pageSize = 20, type?: string, status?: string) {
+    const client = this.getClient();
+    let query = client.from('inquiries').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+    if (type) query = query.eq('type', type);
+    if (status) query = query.eq('status', status);
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+
+    const { data: rows, error, count } = await query;
+    if (error) throw new Error(`查询咨询失败: ${error.message}`);
+
+    return {
+      items: (rows || []).map((r: any) => ({
+        id: r.id, type: r.type, vehicleId: r.vehicle_id,
+        senderAddress: r.sender_address ? parse(r.sender_address) : null,
+        receiverAddress: r.receiver_address ? parse(r.receiver_address) : null,
+        cargoType: r.cargo_type, deliveryCycle: r.delivery_cycle,
+        monthlyTrips: r.monthly_trips, contactName: r.contact_name,
+        phone: r.phone, companyName: r.company_name,
+        consultContent: r.consult_content, status: r.status, note: r.note,
+        createdAt: r.created_at, updatedAt: r.updated_at,
+      })),
+      total: count || 0, page, totalPages: Math.ceil((count || 0) / pageSize),
+    };
+  }
+
+  async updateInquiry(adminId: string, id: string, data: any) {
+    const client = this.getClient();
+    const t = utc();
+    const values: any = { updated_at: t };
+    if (data.status) values.status = data.status;
+    if (data.note !== undefined) values.note = data.note;
+    const { error } = await client.from('inquiries').update(values).eq('id', id);
+    if (error) throw new Error(`更新咨询失败: ${error.message}`);
+    await this.audit(adminId, 'inquiry.update', 'inquiry', id, data);
+    return { success: true };
+  }
+
+  // ─── Contact Settings ───
+  async getContactSettings() {
+    const cacheKey = 'content:contact';
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) return cached;
+
+    const client = this.getClient();
+    const { data, error } = await client.from('contact_settings').select('*').limit(1).maybeSingle();
+    if (error) throw new Error(`查询联系方式失败: ${error.message}`);
+    if (!data) {
+      // Seed default
+      const t = utc();
+      const id = randomUUID();
+      await client.from('contact_settings').insert({
+        id, phone: '400-888-9999', wechat: 'tangxs_official',
+        email: 'service@tangxs.com', work_time: '工作日 9:00-18:00',
+        extra_text: '我们将尽快与您联系，请保持电话畅通', updated_at: t,
+      });
+      const { data: newData } = await client.from('contact_settings').select('*').eq('id', id).maybeSingle();
+      const result = newData ? { phone: newData.phone, wechat: newData.wechat, email: newData.email, workTime: newData.work_time, extraText: newData.extra_text } : null;
+      serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
+      return result;
+    }
+    const result = { phone: data.phone, wechat: data.wechat, email: data.email, workTime: data.work_time, extraText: data.extra_text };
+    serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
+    return result;
+  }
+
+  async saveContactSettings(adminId: string, data: any) {
+    const client = this.getClient();
+    const t = utc();
+    const { data: existing } = await client.from('contact_settings').select('id').limit(1).maybeSingle();
+    const values = {
+      phone: data.phone || '', wechat: data.wechat || '',
+      email: data.email || '', work_time: data.workTime || '工作日 9:00-18:00',
+      extra_text: data.extraText || '', updated_at: t,
+    };
+    if (existing) {
+      await client.from('contact_settings').update(values).eq('id', existing.id);
+    } else {
+      await client.from('contact_settings').insert({ id: randomUUID(), ...values });
+    }
+    await this.audit(adminId, 'contact.update', 'contact', existing?.id || 'new', data);
+    serverCache.invalidate('content:contact');
+    return this.getContactSettings();
   }
 }

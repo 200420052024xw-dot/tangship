@@ -34,15 +34,13 @@ const IndexPage: FC = () => {
   const [activeTab, setActiveTab] = useState<ServiceMode>('single')
   const [currentBanner, setCurrentBanner] = useState(0)
   const { data: catalog, loading: loadingCatalog } = useSWR<Vehicle[]>(
-    'vehicles', () => consumerRequest({ url: '/api/content/vehicles' }), 'static'
+    `vehicles-${activeTab}`, () => consumerRequest({ url: `/api/content/vehicles?mode=${activeTab}` }), 'static'
   )
   const { data: banners } = useSWR<BannerItem[]>(
     'banners', () => consumerRequest({ url: '/api/content/banners' }), 'static'
   )
 
-  const vehicles = (catalog || []).filter(vehicle => activeTab === 'rental'
-    ? vehicle.supportedModes.some(mode => mode === 'rental' || mode === 'purchase')
-    : vehicle.supportedModes.includes(activeTab))
+  const vehicles = catalog || []
 
   /** 轮播图背景颜色 */
   const getBannerColor = (bannerId: string): string => {
@@ -55,15 +53,21 @@ const IndexPage: FC = () => {
     return colors[bannerId] || '#2088D8'
   }
 
-  /** 点击车型卡片 → 跳转到详情页 */
+  /** 点击车型卡片 → 按趟进入详情页; 包月/租购进入信息填写页 */
   const handleVehicleClick = (vehicle: Vehicle) => {
-    const mode: ServiceMode = vehicle.supportedModes.includes(activeTab)
-      ? activeTab
-      : vehicle.supportedModes.includes('single') ? 'single'
-        : vehicle.supportedModes.includes('monthly') ? 'monthly' : 'rental'
-    Taro.navigateTo({
-      url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=${mode}`,
-    }).catch(() => Taro.showToast({ title: '车型详情打开失败', icon: 'none' }))
+    if (activeTab === 'single') {
+      Taro.navigateTo({
+        url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=single`,
+      }).catch(() => Taro.showToast({ title: '车型详情打开失败', icon: 'none' }))
+    } else if (activeTab === 'monthly') {
+      Taro.navigateTo({
+        url: `/pages/inquiry/monthly/index?vehicleId=${encodeURIComponent(vehicle.id)}`,
+      }).catch(() => Taro.showToast({ title: '页面打开失败', icon: 'none' }))
+    } else {
+      Taro.navigateTo({
+        url: `/pages/inquiry/rental/index?vehicleId=${encodeURIComponent(vehicle.id)}`,
+      }).catch(() => Taro.showToast({ title: '页面打开失败', icon: 'none' }))
+    }
   }
 
   /** 轮播图点击 */

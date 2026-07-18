@@ -31,13 +31,6 @@ const MODE_BUTTON_LABEL: Record<VehicleMode, string> = {
   purchase: '咨询购买',
 }
 
-const MODE_HINT: Record<VehicleMode, string> = {
-  single: '下单后由服务端核验路线后给出最终费用',
-  monthly: '客服将在 1 个工作日内联系您提供包月方案',
-  rental: '客服将在 1 个工作日内联系您提供租赁报价',
-  purchase: '客服将在 1 个工作日内联系您提供购车方案',
-}
-
 const VehicleDetailPage: FC = () => {
   const router = Taro.getCurrentInstance().router
   const vehicleId = router?.params?.vehicleId || ''
@@ -93,15 +86,18 @@ const VehicleDetailPage: FC = () => {
       Taro.showToast({ title: '该车型不支持当前业务模式，请返回重新选择', icon: 'none' })
       return
     }
-    if (activeMode !== 'single') {
-      // monthly/rental/purchase 本阶段未开放,只给提示
-      Taro.showToast({ title: MODE_HINT[activeMode], icon: 'none', duration: 2500 })
-      return
+    if (activeMode === 'single') {
+      // 按趟结算: 创建草稿,进入下单流程
+      const store = useOrderDraftStore.getState()
+      store.initDraft('single', vehicle.id)
+      Taro.navigateTo({ url: '/pages/order/create/index?mode=single' })
+    } else if (activeMode === 'monthly') {
+      // 包月专线: 先填信息再选车,这里已选车,进入包月信息填写页
+      Taro.navigateTo({ url: `/pages/inquiry/monthly/index?vehicleId=${vehicle.id}` })
+    } else {
+      // 租购服务: 先填信息再选车,这里已选车,进入租购信息填写页
+      Taro.navigateTo({ url: `/pages/inquiry/rental/index?vehicleId=${vehicle.id}` })
     }
-    // 每次从车型详情开始下单都创建全新草稿，避免复用上一笔订单信息
-    const store = useOrderDraftStore.getState()
-    store.initDraft('single', vehicle.id)
-    Taro.navigateTo({ url: '/pages/order/create/index?mode=single' })
   }
 
   const primaryLabel = modeSupported ? MODE_BUTTON_LABEL[activeMode] : '重新选择业务模式'

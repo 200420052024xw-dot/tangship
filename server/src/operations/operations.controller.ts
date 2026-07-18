@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UploadedFile, UseGuards, UseInterceptors, ForbiddenException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors, ForbiddenException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminAuthGuard } from '../auth/auth';
 import { OperationsService } from './operations.service';
@@ -8,8 +8,8 @@ const superOnly = (req: any) => { if (req.admin.role !== 'super_admin') throw ne
 @Controller('content')
 export class PublicContentController {
   constructor(private service: OperationsService) {}
-  @Get('vehicles') async vehicles(@Req() req: any) {
-    const data = await this.service.listVehicles();
+  @Get('vehicles') async vehicles(@Query('mode') mode?: string, @Req() req?: any) {
+    const data = await this.service.listVehicles(false, mode || undefined);
     // 列表页精简: 只返回首图，去掉大图数组，大幅减少 payload
     const lite = data.map((v: any) => ({
       ...v, images: v.images?.length ? [v.images[0]] : [],
@@ -22,6 +22,8 @@ export class PublicContentController {
     req.res?.setHeader('Cache-Control', 'public, max-age=120');
     return { code: 200, msg: 'success', data: await this.service.listBanners() };
   }
+  @Get('contact') async contact() { return { code: 200, msg: 'success', data: await this.service.getContactSettings() }; }
+  @Post('inquiries') async submitInquiry(@Body() body: any) { return { code: 200, msg: '提交成功', data: await this.service.submitInquiry(body) }; }
 }
 
 @Controller('admin/operations')
@@ -29,7 +31,7 @@ export class PublicContentController {
 export class AdminOperationsController {
   constructor(private service: OperationsService) {}
 
-  @Get('vehicles') async vehicles() { return { code: 200, msg: 'success', data: await this.service.listVehicles(true) }; }
+  @Get('vehicles') async vehicles(@Query('mode') mode?: string) { return { code: 200, msg: 'success', data: await this.service.listVehicles(true, mode || undefined) }; }
   @Put('vehicles/:id') async vehicle(@Req() req: any, @Param('id') id: string, @Body() body: any) { superOnly(req); return { code: 200, msg: '已保存', data: await this.service.saveVehicle(req.admin.id, id, body) }; }
   @Post('vehicles/:id/images') async image(@Req() req: any, @Param('id') id: string, @Body() body: any) { superOnly(req); return { code: 200, msg: '已添加', data: await this.service.addVehicleImage(req.admin.id, id, body) }; }
   @Get('banners') async banners() { return { code: 200, msg: 'success', data: await this.service.listBanners(true) }; }
@@ -40,4 +42,14 @@ export class AdminOperationsController {
   @Post('pricing/preview') async preview(@Body() body: any) { return { code: 200, msg: 'success', data: this.service.preview(body.input, !!body.useDraft) }; }
   @Post('pricing/publish') async publish(@Req() req: any, @Body() body: any) { superOnly(req); return { code: 200, msg: '已发布', data: await this.service.publish(req.admin.id, body.expectedVersion) }; }
   @Post('orders/:id/suggested-quote') async suggest(@Body() body: any) { return { code: 200, msg: 'success', data: this.service.preview(body, false) }; }
+  // Inquiries management
+  @Get('inquiries') async inquiries(@Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('type') type?: string, @Query('status') status?: string) {
+    return { code: 200, msg: 'success', data: await this.service.listInquiries(Number(page) || 1, Number(pageSize) || 20, type, status) };
+  }
+  @Put('inquiries/:id') async updateInquiry(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return { code: 200, msg: '已更新', data: await this.service.updateInquiry(req.admin.id, id, body) };
+  }
+  // Contact settings
+  @Get('contact') async getContact() { return { code: 200, msg: 'success', data: await this.service.getContactSettings() }; }
+  @Put('contact') async saveContact(@Req() req: any, @Body() body: any) { superOnly(req); return { code: 200, msg: '已保存', data: await this.service.saveContactSettings(req.admin.id, body) }; }
 }

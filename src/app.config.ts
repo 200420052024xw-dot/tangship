@@ -8,7 +8,10 @@ export default defineAppConfig({
     'pages/vehicle/detail/index',
     'pages/order/create/index',
     'pages/order/confirm/index',
-    'pages/order/detail/index'
+    'pages/order/detail/index',
+    'pages/inquiry/monthly/index',
+    'pages/inquiry/rental/index',
+    'pages/inquiry/select-vehicle/index'
   ],
   subPackages: [{
     root: 'pages-admin',

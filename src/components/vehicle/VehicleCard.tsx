@@ -22,9 +22,7 @@ interface Props {
 }
 
 export const VehicleCard: FC<Props> = ({ vehicle, index = 0, onSelect }) => {
-  const showPrice =
-    vehicle.supportedModes.includes('single') &&
-    vehicle.pricingDescription.startFrom !== undefined
+  const showPrice = vehicle.pricingDescription.startFrom !== undefined
 
   return (
     <Card

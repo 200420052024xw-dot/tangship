@@ -123,6 +123,44 @@ export class AdminController {
     return { code: 200, msg: '已撤销', data: null }
   }
 
+  @Get('operations/inquiries') async listInquiries() {
+    const client = this.supabase.getClient();
+    const { data, error } = await client.from('inquiries').select('*').order('created_at', { ascending: false });
+    if (error) throw new BadRequestException('查询咨询记录失败');
+    return { code: 200, msg: 'success', data }
+  }
+
+  @Patch('operations/inquiries/:id/status') @HttpCode(200)
+  async updateInquiryStatus(@Param('id') id: string, @Body() body: { status: string; note?: string }) {
+    const valid = ['contacted', 'closed'];
+    if (!valid.includes(body.status)) throw new BadRequestException('状态无效');
+    const client = this.supabase.getClient();
+    const { error } = await client.from('inquiries').update({ status: body.status, note: body.note || null, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw new BadRequestException('更新失败');
+    return { code: 200, msg: '已更新', data: null }
+  }
+
+  @Get('operations/contact') async getContact() {
+    const client = this.supabase.getClient();
+    const { data, error } = await client.from('contact_settings').select('*').limit(1);
+    if (error) throw new BadRequestException('查询联系方式失败');
+    return { code: 200, msg: 'success', data: data || [] }
+  }
+
+  @Patch('operations/contact') @HttpCode(200)
+  async updateContact(@Body() body: { phone?: string; wechat?: string; email?: string; workTime?: string; extraText?: string }) {
+    const client = this.supabase.getClient();
+    const { data: existing } = await client.from('contact_settings').select('id').limit(1).maybeSingle();
+    if (existing) {
+      const { error } = await client.from('contact_settings').update({ ...body, updated_at: new Date().toISOString() }).eq('id', existing.id);
+      if (error) throw new BadRequestException('更新联系方式失败');
+    } else {
+      const { error } = await client.from('contact_settings').insert({ id: randomUUID(), phone: body.phone || '', wechat: body.wechat || '', email: body.email || '', workTime: body.workTime || '', extraText: body.extraText || '', updated_at: new Date().toISOString() });
+      if (error) throw new BadRequestException('创建联系方式失败');
+    }
+    return { code: 200, msg: '已保存', data: null }
+  }
+
   private superOnly(req: any) { if (req.admin.role !== 'super_admin') throw new ForbiddenException('仅超级管理员可执行') }
   private maskOpenid(openid: string) { return openid ? openid.slice(0, 6) + '***' + openid.slice(-4) : null }
 }

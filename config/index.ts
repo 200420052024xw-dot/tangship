@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import http from 'node:http';
 
 import tailwindcss from '@tailwindcss/postcss';
 import { UnifiedViteWeappTailwindcssPlugin } from 'weapp-tailwindcss/vite';
@@ -116,6 +117,36 @@ export default defineConfig<'vite'>(async (merge, _env) => {
     compiler: {
       type: 'vite',
       vitePlugins: [
+        {
+          name: 'admin-reverse-proxy',
+          configureServer(server) {
+            server.middlewares.use((req, res, next) => {
+              const url = req.url || '';
+              if (url.startsWith('/admin')) {
+                const proxyReq = http.request(
+                  {
+                    hostname: 'localhost',
+                    port: 3000,
+                    path: url,
+                    method: req.method,
+                    headers: req.headers,
+                  },
+                  (proxyRes) => {
+                    res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+                    proxyRes.pipe(res);
+                  },
+                );
+                proxyReq.on('error', () => {
+                  res.writeHead(502);
+                  res.end('Bad Gateway');
+                });
+                req.pipe(proxyReq);
+                return;
+              }
+              next();
+            });
+          },
+        },
         {
           name: 'postcss-config-loader-plugin',
           config(config) {

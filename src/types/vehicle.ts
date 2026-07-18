@@ -69,6 +69,8 @@ export interface Vehicle {
   restrictions: string[]
   /** 该车型支持的服务模式,用于详情页按钮分支 */
   supportedModes: VehicleMode[]
+  /** 该车型所属的服务类型(single/monthly/rental),三种服务各自独立车型池 */
+  serviceMode?: 'single' | 'monthly' | 'rental'
   /** 价格说明(非最终成交价) */
   pricingDescription: VehiclePriceHint
   /** 标签,如 ["冷藏", "可上牌"] */
