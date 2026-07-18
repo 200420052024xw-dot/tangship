@@ -1,0 +1,19 @@
+/* 唐小识无人运力配送小程序 - 首页样式 */
+
+/* 优先使用 Tailwind，以下仅用于必要动画 */
+
+/* 数字滚动动画 */
+.number-scroll {
+  animation: numberScroll 0.8s ease-out forwards;
+}
+
+@keyframes numberScroll {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

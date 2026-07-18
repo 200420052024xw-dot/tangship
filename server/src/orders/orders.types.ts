@@ -1,0 +1,7 @@
+export const ORDER_STATUSES=['pending_review','rejected','pending_payment','quote_expired','paid','dispatching','delivering','completed','cancelled','refund_pending','refunded'] as const;
+export type OrderStatus=typeof ORDER_STATUSES[number];
+export const TRANSITIONS:Record<OrderStatus,OrderStatus[]>={pending_review:['rejected','pending_payment','cancelled'],rejected:[],pending_payment:['quote_expired','paid','cancelled'],quote_expired:['cancelled'],paid:['dispatching','refund_pending'],dispatching:['delivering','refund_pending'],delivering:['completed','refund_pending'],completed:[],cancelled:[],refund_pending:['refunded'],refunded:[]};
+export function canTransition(from:OrderStatus,to:OrderStatus){return TRANSITIONS[from].includes(to);}
+export interface AddressInput {contactName:string;phone:string;province?:string;city?:string;district?:string;poiName?:string;formattedAddress:string;detailAddress?:string;longitude:number;latitude:number;}
+export interface ItemInput {category:string;name:string;quantity:number;estimatedWeightKg:number;lengthMm?:number;widthMm?:number;heightMm?:number;fragile?:boolean;oversized?:boolean;needCarry?:boolean;remark?:string;}
+export interface CreateOrderInput {vehicleId:string;mode:'single';pickupType:'immediate'|'scheduled';scheduledAt?:string;scheduledEndAt?:string;customerRemark?:string;sender:AddressInput;receiver:AddressInput;items:ItemInput[];idempotencyKey:string;}
