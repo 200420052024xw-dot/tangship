@@ -1,34 +1,91 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Req, UseGuards } from '@nestjs/common'
-import { randomUUID } from 'node:crypto'
-import { DatabaseService } from '../database/database.service'
-import { SqliteRepositories } from '../database/sqlite.repositories'
-import { UserAuthGuard } from '../auth/auth'
-import { AddressInputDto, addressInputSchema, parseDto } from '../validation/schemas'
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { SupabaseService } from '../supabase/supabase.service';
+import { UserAuthGuard } from '../auth/auth';
+import { AddressInputDto, addressInputSchema, parseDto } from '../validation/schemas';
 
-@Controller('addresses') @UseGuards(UserAuthGuard)
+@Controller('addresses')
+@UseGuards(UserAuthGuard)
 export class AddressesController {
-  constructor(private db: DatabaseService, private repos: SqliteRepositories) {}
-  @Get() list(@Req() req: any) { return { code: 200, msg: 'success', data: this.repos.address.list(req.user.id) } }
+  constructor(private supabase: SupabaseService) {}
+
+  private getClient() { return this.supabase.getClient(); }
+
+  @Get()
+  async list(@Req() req: any) {
+    const { data, error } = await this.getClient().from('addresses').select('*').eq('user_id', req.user.id).is('deleted_at', null).order('created_at', { ascending: false });
+    if (error) throw new Error(`查询地址失败: ${error.message}`);
+    return { code: 200, msg: 'success', data };
+  }
 
   @Post() @HttpCode(200)
-  create(@Req() req: any, @Body() body: unknown) {
-    const data = parseDto(addressInputSchema, body), userId = req.user.id
-    if (data.migrationKey) { const existing = this.db.db.prepare('SELECT id FROM addresses WHERE user_id=? AND migration_key=? AND deleted_at IS NULL').get(userId, data.migrationKey) as { id: string } | undefined; if (existing) return { code: 200, msg: '已存在', data: this.repos.address.findOwned(existing.id, userId) } }
-    const id = randomUUID(), time = new Date().toISOString()
-    this.db.db.transaction(() => { this.clearDefaults(userId, data); this.db.db.prepare('INSERT INTO addresses(id,user_id,contact_name,phone,province,city,district,poi_name,formatted_address,detail_address,longitude,latitude,usage_type,is_default_sender,is_default_receiver,created_at,updated_at,deleted_at,migration_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)').run(id, userId, data.contactName, data.phone, data.province, data.city, data.district, data.poiName, data.formattedAddress, data.detailAddress, data.longitude, data.latitude, data.usageType, data.isDefaultSender ? 1 : 0, data.isDefaultReceiver ? 1 : 0, time, time, data.migrationKey || null) })()
-    return { code: 200, msg: '已创建', data: this.repos.address.findOwned(id, userId) }
+  async create(@Req() req: any, @Body() body: unknown) {
+    const data = parseDto(addressInputSchema, body);
+    const userId = req.user.id;
+    const client = this.getClient();
+
+    if (data.migrationKey) {
+      const { data: existing } = await client.from('addresses').select('id').eq('user_id', userId).eq('migration_key', data.migrationKey).is('deleted_at', null).maybeSingle();
+      if (existing) {
+        const { data: addr } = await client.from('addresses').select('*').eq('id', existing.id).maybeSingle();
+        return { code: 200, msg: '已存在', data: addr };
+      }
+    }
+
+    await this.clearDefaults(userId, data);
+    const id = randomUUID();
+    const time = new Date().toISOString();
+    const { error } = await client.from('addresses').insert({
+      id, user_id: userId, contact_name: data.contactName, phone: data.phone,
+      province: data.province, city: data.city, district: data.district,
+      poi_name: data.poiName, formatted_address: data.formattedAddress,
+      detail_address: data.detailAddress, longitude: data.longitude, latitude: data.latitude,
+      usage_type: data.usageType, is_default_sender: data.isDefaultSender ? 1 : 0,
+      is_default_receiver: data.isDefaultReceiver ? 1 : 0,
+      created_at: time, updated_at: time, migration_key: data.migrationKey || null,
+    });
+    if (error) throw new Error(`创建地址失败: ${error.message}`);
+    const { data: addr } = await client.from('addresses').select('*').eq('id', id).maybeSingle();
+    return { code: 200, msg: '已创建', data: addr };
   }
 
   @Put(':id') @HttpCode(200)
-  update(@Req() req: any, @Param('id') id: string, @Body() body: unknown) {
-    const data = parseDto(addressInputSchema.omit({ migrationKey: true }), body), userId = req.user.id
-    if (!this.repos.address.findOwned(id, userId)) throw new BadRequestException('地址不存在')
-    this.db.db.transaction(() => { this.clearDefaults(userId, data); const result = this.db.db.prepare('UPDATE addresses SET contact_name=?,phone=?,province=?,city=?,district=?,poi_name=?,formatted_address=?,detail_address=?,longitude=?,latitude=?,usage_type=?,is_default_sender=?,is_default_receiver=?,updated_at=? WHERE id=? AND user_id=? AND deleted_at IS NULL').run(data.contactName, data.phone, data.province, data.city, data.district, data.poiName, data.formattedAddress, data.detailAddress, data.longitude, data.latitude, data.usageType, data.isDefaultSender ? 1 : 0, data.isDefaultReceiver ? 1 : 0, new Date().toISOString(), id, userId); if (result.changes !== 1) throw new BadRequestException('地址不存在') })()
-    return { code: 200, msg: '已更新', data: this.repos.address.findOwned(id, userId) }
+  async update(@Req() req: any, @Param('id') id: string, @Body() body: unknown) {
+    const data = parseDto(addressInputSchema.omit({ migrationKey: true }), body);
+    const userId = req.user.id;
+    const client = this.getClient();
+
+    const { data: existing } = await client.from('addresses').select('id').eq('id', id).eq('user_id', userId).is('deleted_at', null).maybeSingle();
+    if (!existing) throw new BadRequestException('地址不存在');
+
+    await this.clearDefaults(userId, data);
+    const time = new Date().toISOString();
+    const { error } = await client.from('addresses').update({
+      contact_name: data.contactName, phone: data.phone,
+      province: data.province, city: data.city, district: data.district,
+      poi_name: data.poiName, formatted_address: data.formattedAddress,
+      detail_address: data.detailAddress, longitude: data.longitude, latitude: data.latitude,
+      usage_type: data.usageType, is_default_sender: data.isDefaultSender ? 1 : 0,
+      is_default_receiver: data.isDefaultReceiver ? 1 : 0, updated_at: time,
+    }).eq('id', id).eq('user_id', userId).is('deleted_at', null);
+    if (error) throw new BadRequestException('地址更新失败');
+    const { data: addr } = await client.from('addresses').select('*').eq('id', id).maybeSingle();
+    return { code: 200, msg: '已更新', data: addr };
   }
 
   @Delete(':id') @HttpCode(200)
-  remove(@Req() req: any, @Param('id') id: string) { const time = new Date().toISOString(), result = this.db.db.prepare('UPDATE addresses SET deleted_at=?,updated_at=?,is_default_sender=0,is_default_receiver=0 WHERE id=? AND user_id=? AND deleted_at IS NULL').run(time, time, id, req.user.id); if (result.changes !== 1) throw new BadRequestException('地址不存在'); return { code: 200, msg: '已删除', data: null } }
+  async remove(@Req() req: any, @Param('id') id: string) {
+    const time = new Date().toISOString();
+    const { error } = await this.getClient().from('addresses').update({
+      deleted_at: time, updated_at: time, is_default_sender: 0, is_default_receiver: 0,
+    }).eq('id', id).eq('user_id', req.user.id).is('deleted_at', null);
+    if (error) throw new BadRequestException('地址不存在');
+    return { code: 200, msg: '已删除', data: null };
+  }
 
-  private clearDefaults(userId: string, data: Pick<AddressInputDto, 'isDefaultSender' | 'isDefaultReceiver'>) { if (data.isDefaultSender) this.db.db.prepare('UPDATE addresses SET is_default_sender=0 WHERE user_id=? AND deleted_at IS NULL').run(userId); if (data.isDefaultReceiver) this.db.db.prepare('UPDATE addresses SET is_default_receiver=0 WHERE user_id=? AND deleted_at IS NULL').run(userId) }
+  private async clearDefaults(userId: string, data: Pick<AddressInputDto, 'isDefaultSender' | 'isDefaultReceiver'>) {
+    const client = this.getClient();
+    if (data.isDefaultSender) await client.from('addresses').update({ is_default_sender: 0 }).eq('user_id', userId).is('deleted_at', null);
+    if (data.isDefaultReceiver) await client.from('addresses').update({ is_default_receiver: 0 }).eq('user_id', userId).is('deleted_at', null);
+  }
 }

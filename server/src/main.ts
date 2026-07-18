@@ -5,11 +5,12 @@ import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { SupabaseService } from '@/supabase/supabase.service';
+import { seedSupabase } from '@/supabase/seed';
 
 for (const candidate of [resolve(process.cwd(), '.env.local'), resolve(process.cwd(), '../.env.local')]) {
   if (existsSync(candidate)) {
     loadEnv({ path: candidate, override: process.env.NODE_ENV !== 'production' });
-    if (process.env.SQLITE_DB_PATH && !isAbsolute(process.env.SQLITE_DB_PATH)) process.env.SQLITE_DB_PATH = resolve(dirname(candidate), process.env.SQLITE_DB_PATH);
     break;
   }
 }
@@ -37,10 +38,12 @@ async function bootstrap() {
 
   // 全局拦截器：统一将 POST 请求的 201 状态码改为 200
   app.useGlobalInterceptors(new HttpStatusInterceptor());
-  // 1. 开启优雅关闭 Hooks (关键!)
   app.enableShutdownHooks();
 
-  // 2. 解析端口
+  // Seed database on startup
+  const supabaseService = app.get(SupabaseService);
+  await seedSupabase(supabaseService);
+
   const port = parsePort();
   try {
     await app.listen(port);
