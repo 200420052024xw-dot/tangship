@@ -131,7 +131,7 @@ export default function OrdersPage() {
     return { count, totalCents }
   }, [filteredOrders])
 
-  /** 导出 CSV */
+  /** 导出 CSV（跨端适配：H5 用 Blob 下载，小程序用文件系统写入） */
   const handleExport = () => {
     if (!filteredOrders.length) {
       Taro.showToast({ title: '暂无订单可导出', icon: 'none' })
@@ -145,13 +145,27 @@ export default function OrdersPage() {
       return `${o.orderNo},${o.vehicleName || o.vehicleId},${sc.label},${o.mode},${fee},${time}`
     })
     const csv = [header, ...rows].join('\n')
-    // 写入临时文件并分享
-    const fs = Taro.getFileSystemManager()
-    const filePath = `${Taro.env.USER_DATA_PATH}/orders_export.csv`
-    fs.writeFileSync(filePath, '\uFEFF' + csv, 'utf8')
-    Taro.showShareMenu({ withShareTicket: true })
-    Taro.showToast({ title: '已导出到文件', icon: 'success' })
-    console.log('[Orders] CSV exported:', filePath)
+    const isH5 = Taro.getEnv() === Taro.ENV_TYPE.WEB
+
+    if (isH5) {
+      // H5: Blob + <a> 触发下载
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'orders_export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+      Taro.showToast({ title: '已导出', icon: 'success' })
+      console.log('[Orders] CSV exported (H5)')
+    } else {
+      // 小程序: 写入用户目录
+      const fs = Taro.getFileSystemManager()
+      const filePath = `${Taro.env.USER_DATA_PATH}/orders_export.csv`
+      fs.writeFileSync(filePath, '\uFEFF' + csv, 'utf8')
+      Taro.showToast({ title: '已导出到文件', icon: 'success' })
+      console.log('[Orders] CSV exported:', filePath)
+    }
   }
 
   const renderEmpty = () => (
