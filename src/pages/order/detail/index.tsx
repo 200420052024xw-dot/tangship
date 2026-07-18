@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CircleCheck, CircleX, Hourglass, Wallet, Ban, Truck, Send, MapPin, Clock3, Receipt, CircleAlert } from 'lucide-react-taro'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel
+} from '@/components/ui/alert-dialog'
+import { CircleCheck, CircleX, Hourglass, Wallet, Ban, Truck, Send, MapPin, Clock3, Receipt, CircleAlert, Phone } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
 
 type Detail = Record<string, any>
@@ -63,6 +67,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Detail | null>(null)
   const [orderId, setOrderId] = useState('')
   const [paying, setPaying] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
 
   useLoad(({ id }) => {
     setOrderId(id)
@@ -86,6 +91,16 @@ export default function OrderDetailPage() {
     } finally { setPaying(false) }
   }
 
+  const handleCancel = async () => {
+    try {
+      const result = await consumerRequest<Detail>({ url: `/api/orders/${orderId}/cancel`, method: 'POST' })
+      setOrder(result)
+      Taro.showToast({ title: '已取消', icon: 'success' })
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '取消失败', icon: 'none' })
+    }
+  }
+
   if (!order) return (
     <View className="min-h-screen bg-slate-50 p-4 space-y-3">
       <Skeleton className="h-20 rounded-xl" />
@@ -101,6 +116,8 @@ export default function OrderDetailPage() {
   const quote = order.quote
   const stepIdx = getStepIndex(order.status)
   const isTerminal = stepIdx === -1 || order.status === 'completed'
+  const canCancel = ['pending_review', 'pending_payment'].includes(order.status)
+  const isPaid = order.status === 'paid'
 
   return (
     <View className="min-h-screen bg-slate-50 pb-6">
@@ -116,7 +133,7 @@ export default function OrderDetailPage() {
       </View>
 
       <View className="px-4 -mt-2 space-y-3">
-        {/* 状态步骤条 */}
+        {/* 状态步骤条 - 加大字号和图标 */}
         {!isTerminal && (
           <Card>
             <CardContent className="p-4">
@@ -127,10 +144,10 @@ export default function OrderDetailPage() {
                   const active = Math.floor(stepIdx) === i
                   return (
                     <View key={step.key} className="flex flex-col items-center flex-1">
-                      <View className={`w-7 h-7 rounded-full flex items-center justify-center ${done ? 'bg-blue-500' : active ? 'bg-blue-100' : 'bg-slate-100'}`}>
-                        <StepIcon size={14} color={done ? '#ffffff' : active ? '#2563eb' : '#94a3b8'} />
+                      <View className={`w-9 h-9 rounded-full flex items-center justify-center ${done ? 'bg-blue-500' : active ? 'bg-blue-100' : 'bg-slate-100'}`}>
+                        <StepIcon size={18} color={done ? '#ffffff' : active ? '#2563eb' : '#94a3b8'} />
                       </View>
-                      <Text className={`block text-[10px] mt-1 ${done ? 'text-blue-600' : 'text-slate-400'}`}>{step.label}</Text>
+                      <Text className={`block text-xs mt-1 font-medium ${done ? 'text-blue-600' : 'text-slate-400'}`}>{step.label}</Text>
                     </View>
                   )
                 })}
@@ -139,22 +156,21 @@ export default function OrderDetailPage() {
           </Card>
         )}
 
-        {/* 地址信息卡 */}
+        {/* 地址信息卡 - 图标与文字对齐 */}
         <Card>
           <CardContent className="p-4">
-            <View className="flex flex-row items-start gap-3">
-              <View className="flex flex-col items-center gap-2 pt-1">
-                <Send size={14} color="#059669" />
-                <View className="w-1 h-6 bg-slate-200" />
-                <MapPin size={14} color="#2563eb" />
-              </View>
-              <View className="flex-1 min-w-0 space-y-3">
-                <View>
+            <View className="space-y-3">
+              <View className="flex flex-row items-center gap-2">
+                <Send size={16} color="#059669" />
+                <View className="flex-1 min-w-0">
                   <Text className="block text-xs text-slate-400">寄件地址</Text>
                   <Text className="block text-sm text-slate-700 mt-1">{sender?.formatted_address || '—'}{sender?.detail_address ? ` ${sender.detail_address}` : ''}</Text>
                   <Text className="block text-xs text-slate-400 mt-1">{sender?.contact_name} {sender?.phone}</Text>
                 </View>
-                <View>
+              </View>
+              <View className="flex flex-row items-center gap-2">
+                <MapPin size={16} color="#2563eb" />
+                <View className="flex-1 min-w-0">
                   <Text className="block text-xs text-slate-400">收件地址</Text>
                   <Text className="block text-sm text-slate-700 mt-1">{receiver?.formatted_address || '—'}{receiver?.detail_address ? ` ${receiver.detail_address}` : ''}</Text>
                   <Text className="block text-xs text-slate-400 mt-1">{receiver?.contact_name} {receiver?.phone}</Text>
@@ -228,7 +244,7 @@ export default function OrderDetailPage() {
         )}
 
         {/* 已支付 */}
-        {order.status === 'paid' && (
+        {isPaid && (
           <Card>
             <CardContent className="p-4">
               <View className="flex flex-row items-center gap-2">
@@ -259,12 +275,44 @@ export default function OrderDetailPage() {
         )}
 
         {/* 操作按钮 */}
-        {['pending_review', 'pending_payment'].includes(order.status) && (
-          <Button variant="outline" className="w-full" onClick={() => consumerRequest<Detail>({ url: `/api/orders/${orderId}/cancel`, method: 'POST' }).then(setOrder).catch(error => Taro.showToast({ title: error instanceof Error ? error.message : '取消失败', icon: 'none' }))}>
+        {canCancel && (
+          <Button variant="outline" className="w-full" onClick={() => setCancelDialogOpen(true)}>
             <Text className="block">取消订单</Text>
           </Button>
         )}
+
+        {/* 已支付订单 - 联系客服 */}
+        {isPaid && (
+          <Button variant="outline" className="w-full" onClick={() => Taro.makePhoneCall({ phoneNumber: '400-000-0000' }).catch(() => Taro.showToast({ title: '客服电话：400-000-0000', icon: 'none', duration: 3000 }))}>
+            <View className="flex flex-row items-center gap-2">
+              <Phone size={16} color="#475569" />
+              <Text className="block">联系客服</Text>
+            </View>
+          </Button>
+        )}
       </View>
+
+      {/* 取消订单确认弹窗 */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <Text className="block text-lg font-semibold">确认取消订单？</Text>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <Text className="block text-sm text-slate-500">取消后订单将无法恢复，如需再次下单请重新选择车型。</Text>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              <Text className="block">再想想</Text>
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel}>
+              <Text className="block">确认取消</Text>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </View>
   )
 }

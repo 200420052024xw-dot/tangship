@@ -32,7 +32,6 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   completed:       { label: '已完成',  color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CircleCheck },
 }
 
-const modeLabels: Record<string, string> = { single: '单趟配送', monthly: '企业包月', rental: '短租体验', purchase: '整车购买' }
 
 function formatTime(iso: string) {
   const d = new Date(iso)
@@ -130,9 +129,6 @@ export default function OrdersPage() {
                     <View className="flex flex-row items-center gap-2">
                       <Truck size={16} color="#475569" />
                       <Text className="block text-sm font-semibold text-slate-800">{order.vehicleName || order.vehicleId}</Text>
-                      <View className="px-2 py-1 bg-slate-100 rounded">
-                        <Text className="text-[10px] text-slate-500">{modeLabels[order.mode] || order.mode}</Text>
-                      </View>
                     </View>
                     <View className="flex flex-row items-center gap-1">
                       <StatusIcon size={14} color={sc.color === 'text-amber-600' ? '#d97706' : sc.color === 'text-blue-600' ? '#2563eb' : sc.color === 'text-emerald-600' ? '#059669' : sc.color === 'text-red-500' ? '#ef4444' : sc.color === 'text-violet-600' ? '#7c3aed' : sc.color === 'text-indigo-600' ? '#4f46e5' : sc.color === 'text-orange-500' ? '#f97316' : '#94a3b8'} />
@@ -141,15 +137,14 @@ export default function OrdersPage() {
                   </View>
 
                   {/* 第二行：地址信息 */}
-                  <View className="mt-3 flex flex-row items-start gap-2">
-                    <View className="flex flex-col items-center gap-1 pt-1">
-                      <Send size={12} color="#059669" />
-                      <View className="w-px h-4 bg-slate-200" />
-                      <MapPin size={12} color="#2563eb" />
+                  <View className="mt-3 space-y-1">
+                    <View className="flex flex-row items-center gap-2">
+                      <Send size={14} color="#059669" />
+                      <Text className="block text-xs text-slate-600 truncate flex-1">{sender?.formattedAddress || '寄件地址'}</Text>
                     </View>
-                    <View className="flex-1 min-w-0">
-                      <Text className="block text-xs text-slate-600 truncate">{sender?.formattedAddress || '寄件地址'}</Text>
-                      <Text className="block text-xs text-slate-600 mt-2 truncate">{receiver?.formattedAddress || '收件地址'}</Text>
+                    <View className="flex flex-row items-center gap-2">
+                      <MapPin size={14} color="#2563eb" />
+                      <Text className="block text-xs text-slate-600 truncate flex-1">{receiver?.formattedAddress || '收件地址'}</Text>
                     </View>
                   </View>
 
