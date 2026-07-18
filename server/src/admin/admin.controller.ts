@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, HttpException, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, HttpException, HttpStatus, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
 import type { Request, Response } from 'express'
 import { randomUUID } from 'node:crypto'
 import { SupabaseService } from '../supabase/supabase.service'
@@ -18,8 +18,8 @@ export class AdminAuthController {
   @Post('login') @HttpCode(200)
   async login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: { username: string; password: string }) {
     const key = req.ip || 'unknown', now = Date.now(), state = attempts.get(key)
-    if (state && state.reset > now && state.count >= 5) throw new TooManyRequestsException()
-    if (!state || state.reset <= now) attempts.set(key, { count: 1, reset: now + 15 * 60_000 }); else state.count++
+    if (state && state.reset > now && state.count >= 10) throw new HttpException('登录尝试过多，请15分钟后再试', HttpStatus.TOO_MANY_REQUESTS)
+    if (!state || state.reset <= now) attempts.set(key, { count: 1, reset: now + 15 * 60_000 })
 
     const client = this.supabase.getClient();
     const { data: admin, error } = await client.from('admin_users').select('*').eq('username', String(body.username || '').slice(0, 100)).maybeSingle();
