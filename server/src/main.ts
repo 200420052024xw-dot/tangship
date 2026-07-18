@@ -31,7 +31,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const allowedOrigins=(process.env.ADMIN_ALLOWED_ORIGINS||'http://localhost:5174').split(',').map(v=>v.trim()).filter(Boolean);
-  app.enableCors({origin:(origin,callback)=>{if(!origin||allowedOrigins.includes(origin))callback(null,true);else callback(new Error('Origin not allowed'));},credentials:true});
+  const isDev = process.env.NODE_ENV !== 'production';
+  app.enableCors({origin:(origin,callback)=>{
+    if(!origin||allowedOrigins.includes(origin)||(isDev&&(origin.includes('localhost')||origin.includes('dev.coze.site'))))callback(null,true);
+    else callback(new Error('Origin not allowed'));
+  },credentials:true});
   app.setGlobalPrefix('api');
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ limit: '1mb', extended: true }));

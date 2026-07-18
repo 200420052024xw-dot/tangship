@@ -14,6 +14,7 @@
 
 import { create } from 'zustand'
 import Taro from '@tarojs/taro'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 /** 缓存条目 */
 interface CacheEntry<T> {
@@ -31,52 +32,41 @@ const CACHE_CONFIGS = {
 export type CacheCategory = keyof typeof CACHE_CONFIGS
 
 interface DataCacheStore {
-  /** 内存缓存 */
   entries: Record<string, CacheEntry<unknown>>
-  /** 正在进行的请求（去重） */
-  pending: Record<string, Promise<unknown>>
-
-  /** 获取缓存数据 */
   get: <T>(key: string) => T | null
-  /** 设置缓存数据 */
-  set: <T>(key: string, data: T, persistKey?: string) => void
-  /** 判断缓存是否过期 */
+  hydrate: (key: string) => void
+  set: <T>(key: string, data: T, persist?: boolean) => void
   isStale: (key: string, category: CacheCategory) => boolean
-  /** 获取或去重 Promise */
-  getPending: <T>(key: string) => Promise<T> | null
-  /** 设置正在进行的请求 */
-  setPending: <T>(key: string, promise: Promise<T>) => void
-  /** 清除正在进行的请求 */
-  clearPending: (key: string) => void
-  /** 使指定 key 失效 */
   invalidate: (key: string) => void
-  /** 使匹配前缀的所有 key 失效 */
   invalidatePrefix: (prefix: string) => void
 }
 
 export const useDataCache = create<DataCacheStore>((set, get) => ({
   entries: {},
-  pending: {},
 
   get: <T,>(key: string): T | null => {
     const entry = get().entries[key] as CacheEntry<T> | undefined
     if (entry) return entry.data
-    // 尝试从 localStorage 恢复
-    try {
-      const raw = Taro.getStorageSync(`dc_${key}`)
-      if (raw) {
-        const parsed = JSON.parse(raw) as CacheEntry<T>
-        set(s => ({ entries: { ...s.entries, [key]: parsed } }))
-        return parsed.data
-      }
-    } catch { /* ignore */ }
     return null
   },
 
-  set: <T,>(key: string, data: T, persistKey?: string) => {
+  /** 从 localStorage 恢复缓存（仅在外部调用，不在 render 中调用） */
+  hydrate: (key: string) => {
+    const entry = get().entries[key]
+    if (entry) return // 已有内存缓存
+    try {
+      const raw = Taro.getStorageSync(`dc_${key}`)
+      if (raw) {
+        const parsed = JSON.parse(raw) as CacheEntry<unknown>
+        set(s => ({ entries: { ...s.entries, [key]: parsed } }))
+      }
+    } catch { /* ignore */ }
+  },
+
+  set: <T,>(key: string, data: T, persist?: boolean) => {
     const entry: CacheEntry<T> = { data, updatedAt: Date.now() }
     set(s => ({ entries: { ...s.entries, [key]: entry } }))
-    if (persistKey) {
+    if (persist) {
       try { Taro.setStorageSync(`dc_${key}`, JSON.stringify(entry)) } catch { /* ignore */ }
     }
   },
@@ -85,21 +75,6 @@ export const useDataCache = create<DataCacheStore>((set, get) => ({
     const entry = get().entries[key]
     if (!entry) return true
     return Date.now() - entry.updatedAt > CACHE_CONFIGS[category].staleTime
-  },
-
-  getPending: <T,>(key: string): Promise<T> | null => {
-    return (get().pending[key] as Promise<T> | undefined) || null
-  },
-
-  setPending: <T,>(key: string, promise: Promise<T>) => {
-    set(s => ({ pending: { ...s.pending, [key]: promise } }))
-  },
-
-  clearPending: (key: string) => {
-    set(s => {
-      const { [key]: _, ...rest } = s.pending
-      return { pending: rest }
-    })
   },
 
   invalidate: (key: string) => {
@@ -123,65 +98,85 @@ export const useDataCache = create<DataCacheStore>((set, get) => ({
 }))
 
 /**
- * SWR 核心 hook — 页面侧使用
+ * SWR hook — React 安全，无 render 副作用
  *
- * @param key 缓存 key
+ * @param key    缓存 key（null = 禁用）
  * @param fetcher 数据获取函数
  * @param category 缓存分类
- * @returns { data, loading, refresh }
- *
- * 用法:
- * const { data: vehicles, loading } = useSWR('vehicles', () => consumerRequest<Vehicle[]>({ url: '/api/content/vehicles' }), 'static')
+ * @returns { data, loading, error, refresh }
  */
 export function useSWR<T>(
-  key: string,
-  fetcher: () => Promise<T>,
+  key: string | null,
+  fetcher: (() => Promise<T>) | null,
   category: CacheCategory = 'dynamic',
 ) {
-  const { get, set, isStale, getPending, setPending, clearPending } = useDataCache()
+  // 所有 useState 初始化器都是纯值，无副作用
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const fetcherRef = useRef(fetcher)
+  fetcherRef.current = fetcher
+  const mountedRef = useRef(true)
 
-  const cached = get<T>(key)
-  const stale = isStale(key, category)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
-  // 需要刷新的情况: 无缓存 or 缓存过期
-  const needRefresh = !cached || stale
-
-  if (needRefresh) {
-    // 去重: 避免多个组件同时触发同一请求
-    const existing = getPending<T>(key)
-    if (!existing) {
-      const promise = fetcher()
-        .then(data => {
-          set(key, data, category === 'static' ? key : undefined)
-          clearPending(key)
-          return data
-        })
-        .catch(err => {
-          clearPending(key)
-          throw err
-        })
-      setPending(key, promise)
+  const doFetch = useCallback(async (fetchKey: string) => {
+    const fn = fetcherRef.current
+    if (!fn) return
+    if (mountedRef.current) setLoading(true)
+    if (mountedRef.current) setError(null)
+    try {
+      const result = await fn()
+      useDataCache.getState().set(fetchKey, result, category === 'static')
+      if (mountedRef.current) {
+        setData(result)
+        setError(null)
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err : new Error(String(err)))
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false)
     }
-  }
+  }, [category])
 
-  return {
-    /** 缓存数据（有则立即可用） */
-    data: cached,
-    /** 是否正在首次加载（无缓存且正在请求） */
-    loading: !cached && !!getPending(key),
-    /** 手动触发刷新 */
-    refresh: () => {
-      const existing = getPending<T>(key)
-      if (existing) return existing
-      const promise = fetcher()
-        .then(data => { set(key, data, category === 'static' ? key : undefined); clearPending(key); return data })
-        .catch(err => { clearPending(key); throw err })
-      setPending(key, promise)
-      return promise
-    },
-  }
+  useEffect(() => {
+    if (!key || !fetcherRef.current) {
+      setLoading(false)
+      return
+    }
+
+    // 从 localStorage 恢复（static 类型）
+    if (category === 'static') {
+      useDataCache.getState().hydrate(key)
+    }
+
+    // 从内存缓存读
+    const cached = useDataCache.getState().get<T>(key)
+    if (cached !== null) {
+      setData(cached)
+      setLoading(false)
+    }
+
+    // 缓存过期 or 无缓存 → 请求
+    const stale = useDataCache.getState().isStale(key, category)
+    if (cached === null || stale) {
+      setLoading(true)
+      doFetch(key)
+    }
+  }, [key, category, doFetch])
+
+  const refresh = useCallback(() => {
+    if (key) doFetch(key)
+  }, [key, doFetch])
+
+  return { data, loading, error, refresh }
 }
 
-/** 手动使缓存失效（用于写操作后刷新） */
+/** 手动使缓存失效 */
 export const invalidateCache = (key: string) => useDataCache.getState().invalidate(key)
 export const invalidateCachePrefix = (prefix: string) => useDataCache.getState().invalidatePrefix(prefix)
