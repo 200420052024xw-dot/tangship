@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowLeft, User, Phone, Building2, MessageSquare } from 'lucide-react-taro'
+import { ArrowLeft } from 'lucide-react-taro'
 import { ContactPopup } from '@/components/inquiry/ContactPopup'
 import { consumerRequest } from '@/services/consumer-api'
 
@@ -98,43 +98,36 @@ const RentalInquiryPage: FC = () => {
           请填写以下信息，我们将在1个工作日内联系您提供租购方案
         </Text>
 
+        {/* 联系信息 */}
         <Card className="mb-3">
           <CardContent className="p-4">
             <Text className="block text-base font-semibold text-slate-800 mb-3">联系信息</Text>
             <View className="mb-3">
-              <View className="flex items-center gap-2 mb-1">
-                <User size={14} color="#2088D8" />
-                <Text className="block text-sm font-medium text-slate-700">姓名 *</Text>
-              </View>
+              <Text className="block text-sm font-medium text-slate-700 mb-1">姓名 *</Text>
               <Input placeholder="请输入联系人姓名" value={contactName} onInput={e => setContactName(e.detail.value)} />
             </View>
             <View className="mb-3">
-              <View className="flex items-center gap-2 mb-1">
-                <Phone size={14} color="#2088D8" />
-                <Text className="block text-sm font-medium text-slate-700">电话 *</Text>
-              </View>
+              <Text className="block text-sm font-medium text-slate-700 mb-1">电话 *</Text>
               <Input type="number" placeholder="请输入联系电话" value={phone} onInput={e => setPhone(e.detail.value)} />
             </View>
             <View className="mb-3">
-              <View className="flex items-center gap-2 mb-1">
-                <Building2 size={14} color="#94A3B8" />
-                <Text className="block text-sm font-medium text-slate-700">公司名称（选填）</Text>
-              </View>
+              <Text className="block text-sm font-medium text-slate-700 mb-1">公司名称（选填）</Text>
               <Input placeholder="请输入公司名称" value={companyName} onInput={e => setCompanyName(e.detail.value)} />
             </View>
-            <View>
-              <View className="flex items-center gap-2 mb-1">
-                <MessageSquare size={14} color="#94A3B8" />
-                <Text className="block text-sm font-medium text-slate-700">咨询内容（选填）</Text>
-              </View>
-              <Textarea
-                style={{ width: '100%', minHeight: '80px' }}
-                placeholder="请描述您想咨询的内容..."
-                value={consultContent}
-                onInput={e => setConsultContent(e.detail.value)}
-                maxlength={500}
-              />
-            </View>
+          </CardContent>
+        </Card>
+
+        {/* 咨询内容 */}
+        <Card className="mb-3">
+          <CardContent className="p-4">
+            <Text className="block text-base font-semibold text-slate-800 mb-2">咨询内容（选填）</Text>
+            <Textarea
+              className="h-auto min-h-16"
+              placeholder="请描述您想咨询的内容，如车型偏好、使用场景等"
+              value={consultContent}
+              onInput={e => setConsultContent(e.detail.value)}
+              maxlength={500}
+            />
           </CardContent>
         </Card>
       </View>
