@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '@/app.module';
 import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
@@ -28,7 +29,7 @@ function parsePort(): number {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const allowedOrigins=(process.env.ADMIN_ALLOWED_ORIGINS||'http://localhost:5174').split(',').map(v=>v.trim()).filter(Boolean);
   const isDev = process.env.NODE_ENV !== 'production';
@@ -36,9 +37,23 @@ async function bootstrap() {
     if(!origin||allowedOrigins.includes(origin)||(isDev&&(origin.includes('localhost')||origin.includes('dev.coze.site'))))callback(null,true);
     else callback(new Error('Origin not allowed'));
   },credentials:true});
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['/admin/{*s}'],
+  });
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
+
+  // Serve admin-web static files
+  const adminDist = resolve(process.cwd(), 'public/admin');
+  if (existsSync(adminDist)) {
+    app.useStaticAssets(adminDist, { prefix: '/admin/' });
+    // SPA fallback for client-side routing
+    const expressApp = app.getHttpAdapter().getInstance() as express.Express;
+    expressApp.get(/^\/admin(?!\/assets\/).*/, (_req, res) => {
+      res.sendFile(resolve(adminDist, 'index.html'));
+    });
+    console.log(`Admin web served at /admin/`);
+  }
 
   // 全局拦截器：统一将 POST 请求的 201 状态码改为 200
   app.useGlobalInterceptors(new HttpStatusInterceptor());
