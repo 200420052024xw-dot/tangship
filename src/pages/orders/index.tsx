@@ -123,12 +123,6 @@ export default function OrdersPage() {
     ? allOrders
     : allOrders.filter(o => (TAB_FILTERS[activeTab] || []).includes(o.status))
 
-  /** 每个 Tab 的数量角标 */
-  const tabCount = (tab: string) => {
-    if (tab === 'all') return allOrders.length
-    return allOrders.filter(o => (TAB_FILTERS[tab] || []).includes(o.status)).length
-  }
-
   const renderEmpty = () => (
     <View className="flex flex-col items-center justify-center pt-16">
       <Inbox size={48} color="#cbd5e1" />
@@ -200,13 +194,8 @@ export default function OrdersPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full">
             {Object.keys(TAB_FILTERS).map(tab => (
-              <TabsTrigger key={tab} value={tab} className="flex-1 relative">
+              <TabsTrigger key={tab} value={tab} className="flex-1">
                 <Text className="block">{TAB_LABELS[tab]}</Text>
-                {tabCount(tab) > 0 && (
-                  <View className="absolute -top-1 -right-1 min-w-4 h-4 rounded-full bg-red-500 flex items-center justify-center px-1">
-                    <Text className="block text-white text-[10px] leading-none">{tabCount(tab)}</Text>
-                  </View>
-                )}
               </TabsTrigger>
             ))}
           </TabsList>
