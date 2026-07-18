@@ -6,14 +6,20 @@ export async function seedSupabase(supabase: SupabaseService) {
   const client = supabase.getClient();
   const now = new Date().toISOString();
 
-  // 1. Seed default admin user
-  const { data: existingAdmin } = await client.from('admin_users').select('id').eq('username', 'admin').maybeSingle();
-  if (!existingAdmin) {
-    await client.from('admin_users').insert({
-      id: randomUUID(), username: 'admin', password_hash: hashPassword('admin123'),
-      role: 'super_admin', status: 'active', created_at: now, updated_at: now,
-    });
-    console.log('[Seed] Admin user created (admin/admin123)');
+  // 1. Seed default admin users
+  const defaultAdmins = [
+    { username: 'admin', password: 'admin123', role: 'super_admin' },
+    { username: 'wjf', password: '123456', role: 'super_admin' },
+  ];
+  for (const a of defaultAdmins) {
+    const { data: existing } = await client.from('admin_users').select('id').eq('username', a.username).maybeSingle();
+    if (!existing) {
+      await client.from('admin_users').insert({
+        id: randomUUID(), username: a.username, password_hash: hashPassword(a.password),
+        role: a.role, status: 'active', created_at: now, updated_at: now,
+      });
+      console.log(`[Seed] Admin user created (${a.username}/${a.password})`);
+    }
   }
 
   // 2. Seed vehicle catalog
