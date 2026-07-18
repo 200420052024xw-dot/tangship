@@ -7,7 +7,7 @@ import type { VehicleMode } from '@/types/vehicle'
 export type ServiceMode = Extract<VehicleMode, 'single' | 'monthly' | 'rental'>
 interface Props { value: ServiceMode; onChange: (next: ServiceMode) => void }
 export const ServiceModeSwitcher: FC<Props> = ({ value, onChange }) => (
-  <View style={{ position: 'sticky', top: 0, zIndex: 50 }} className="bg-white shadow-sm">
+  <View className="bg-white">
     <Tabs value={value} onValueChange={v => onChange(v as ServiceMode)} className="w-full">
       <TabsList className="w-full h-12 bg-slate-50 rounded-none p-0 flex">
         <TabsTrigger value="single" className="flex-1 h-12 rounded-none">

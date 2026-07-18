@@ -17,7 +17,7 @@ import Taro from '@tarojs/taro'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowLeft, Package, Calendar, Repeat } from 'lucide-react-taro'
+import { Package, Calendar, Repeat } from 'lucide-react-taro'
 import { AddressCard } from '@/components/order/AddressCard'
 import { AddressRoleHeader } from '@/components/order/AddressRoleHeader'
 import { ContactPopup } from '@/components/inquiry/ContactPopup'
@@ -50,7 +50,9 @@ const MonthlyInquiryPage: FC = () => {
   const [submitting, setSubmitting] = useState(false)
   const [showContact, setShowContact] = useState(false)
 
-  const handleBack = () => Taro.navigateBack()
+  const isFormValid = senderAddress && receiverAddress
+    && contactName.trim() && phone.trim() && cargoType.trim()
+    && deliveryCycle.trim() && monthlyTrips.trim()
 
   /** 选择地址 — 跳转地址簿列表页，通过 EventChannel 回传 */
   const chooseAddress = (role: 'sender' | 'receiver') => {
@@ -93,10 +95,6 @@ const MonthlyInquiryPage: FC = () => {
     setSenderAddress(receiverAddress)
     setReceiverAddress(senderAddress)
   }
-
-  const isFormValid = senderAddress && receiverAddress
-    && contactName.trim() && phone.trim() && cargoType.trim()
-    && deliveryCycle.trim() && monthlyTrips.trim()
 
   const handleSubmit = async () => {
     if (!isFormValid || submitting) return
@@ -156,15 +154,8 @@ const MonthlyInquiryPage: FC = () => {
 
   return (
     <View className="min-h-screen bg-slate-50 pb-28">
-      {/* 顶部标题栏 */}
-      <View style={{ position: 'sticky', top: 0, zIndex: 10 }} className="bg-white border-b border-slate-100">
-        <View className="flex items-center px-4 h-12">
-          <View className="flex items-center gap-2" onClick={handleBack}>
-            <ArrowLeft size={18} color="#1E293B" />
-            <Text className="block text-base font-medium text-slate-800">包月专线信息</Text>
-          </View>
-        </View>
-      </View>
+      {/* 安全区顶部留白（自定义导航栏模式） */}
+      <View style={{ height: 'env(safe-area-inset-top, 0px)', backgroundColor: '#fff' }} />
 
       <View className="p-4">
         <Text className="block text-sm text-slate-500 mb-4">

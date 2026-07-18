@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowLeft } from 'lucide-react-taro'
 import { ContactPopup } from '@/components/inquiry/ContactPopup'
 import { consumerRequest } from '@/services/consumer-api'
 
@@ -30,8 +29,6 @@ const RentalInquiryPage: FC = () => {
   const [consultContent, setConsultContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showContact, setShowContact] = useState(false)
-
-  const handleBack = () => Taro.navigateBack()
 
   const isFormValid = contactName.trim() && phone.trim()
 
@@ -83,15 +80,8 @@ const RentalInquiryPage: FC = () => {
 
   return (
     <View className="min-h-screen bg-slate-50 pb-28">
-      {/* 顶部标题栏 */}
-      <View style={{ position: 'sticky', top: 0, zIndex: 10 }} className="bg-white border-b border-slate-100">
-        <View className="flex items-center px-4 h-12">
-          <View className="flex items-center gap-2" onClick={handleBack}>
-            <ArrowLeft size={18} color="#1E293B" />
-            <Text className="block text-base font-medium text-slate-800">租购服务咨询</Text>
-          </View>
-        </View>
-      </View>
+      {/* 安全区顶部留白（自定义导航栏模式） */}
+      <View style={{ height: 'env(safe-area-inset-top, 0px)', backgroundColor: '#fff' }} />
 
       <View className="p-4">
         <Text className="block text-sm text-slate-500 mb-4">

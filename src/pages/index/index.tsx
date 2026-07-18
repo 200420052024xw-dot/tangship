@@ -97,6 +97,18 @@ const IndexPage: FC = () => {
 
   return (
     <View className="min-h-screen bg-slate-50">
+      {/* 统一吸顶：标题 + Tab，无缝连接无间距 */}
+      <View style={{ position: 'sticky', top: 0, zIndex: 50 }} className="bg-white shadow-sm">
+        {/* 状态栏占位（自定义导航栏模式） */}
+        <View style={{ height: 'env(safe-area-inset-top, 0px)' }} />
+        {/* 应用标题 */}
+        <View className="flex items-center px-4 h-11">
+          <Text className="block text-lg font-semibold text-slate-800">唐小识无人配送</Text>
+        </View>
+        {/* 服务模式切换 — 紧贴标题下方 */}
+        <ServiceModeSwitcher value={activeTab} onChange={setActiveTab} />
+      </View>
+
       {/* 轮播图 */}
       {(banners || []).length > 0 && (
         <View className="w-full relative overflow-hidden">
@@ -126,9 +138,6 @@ const IndexPage: FC = () => {
           </Swiper>
         </View>
       )}
-
-      {/* 服务模式切换 */}
-      <ServiceModeSwitcher value={activeTab} onChange={setActiveTab} />
 
       {/* 车型列表 */}
       <View className="p-4 pb-16">
