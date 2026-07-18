@@ -1,11 +1,12 @@
 import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Send, MapPin, Inbox } from 'lucide-react-taro'
+import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Send, MapPin, Inbox, Download } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 
@@ -123,6 +124,36 @@ export default function OrdersPage() {
     ? allOrders
     : allOrders.filter(o => (TAB_FILTERS[activeTab] || []).includes(o.status))
 
+  /** 当前筛选的统计 */
+  const stats = useMemo(() => {
+    const count = filteredOrders.length
+    const totalCents = filteredOrders.reduce((sum, o) => sum + (o.quote?.totalFeeCents || 0), 0)
+    return { count, totalCents }
+  }, [filteredOrders])
+
+  /** 导出 CSV */
+  const handleExport = () => {
+    if (!filteredOrders.length) {
+      Taro.showToast({ title: '暂无订单可导出', icon: 'none' })
+      return
+    }
+    const header = '订单号,车型,状态,模式,总费用(元),下单时间'
+    const rows = filteredOrders.map(o => {
+      const sc = statusConfig[o.status] || { label: o.status }
+      const fee = o.quote?.totalFeeCents ? (o.quote.totalFeeCents / 100).toFixed(2) : ''
+      const time = new Date(o.createdAt).toLocaleString('zh-CN')
+      return `${o.orderNo},${o.vehicleName || o.vehicleId},${sc.label},${o.mode},${fee},${time}`
+    })
+    const csv = [header, ...rows].join('\n')
+    // 写入临时文件并分享
+    const fs = Taro.getFileSystemManager()
+    const filePath = `${Taro.env.USER_DATA_PATH}/orders_export.csv`
+    fs.writeFileSync(filePath, '\uFEFF' + csv, 'utf8')
+    Taro.showShareMenu({ withShareTicket: true })
+    Taro.showToast({ title: '已导出到文件', icon: 'success' })
+    console.log('[Orders] CSV exported:', filePath)
+  }
+
   const renderEmpty = () => (
     <View className="flex flex-col items-center justify-center pt-16">
       <Inbox size={48} color="#cbd5e1" />
@@ -184,13 +215,8 @@ export default function OrdersPage() {
 
   return (
     <View className="min-h-screen bg-slate-50">
-      {/* 顶部栏 */}
-      <View className="bg-white px-4 pt-4 pb-2 border-b border-slate-100">
-        <Text className="block text-xl font-semibold text-slate-800">我的订单</Text>
-      </View>
-
       {/* Tab 筛选栏 */}
-      <View className="bg-white px-2 pb-0 border-b border-slate-100">
+      <View className="bg-white px-2 pt-3 pb-0 border-b border-slate-100">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full">
             {Object.keys(TAB_FILTERS).map(tab => (
@@ -201,6 +227,24 @@ export default function OrdersPage() {
           </TabsList>
         </Tabs>
       </View>
+
+      {/* 统计条 + 导出 */}
+      {!loading && (
+        <View className="flex flex-row items-center justify-between px-4 py-2 bg-white border-b border-slate-100">
+          <View className="flex flex-row items-center gap-4">
+            <Text className="block text-xs text-slate-500">共 <Text className="text-sm font-semibold text-slate-700">{stats.count}</Text> 单</Text>
+            {stats.totalCents > 0 && (
+              <Text className="block text-xs text-slate-500">合计 <Text className="text-sm font-semibold text-blue-600">{formatCents(stats.totalCents)}</Text></Text>
+            )}
+          </View>
+          <Button variant="ghost" size="sm" onClick={handleExport} className="px-2">
+            <View className="flex flex-row items-center gap-1">
+              <Download size={14} color="#475569" />
+              <Text className="block text-xs text-slate-600">导出</Text>
+            </View>
+          </Button>
+        </View>
+      )}
 
       {/* 内容区 */}
       <View className="p-4">
