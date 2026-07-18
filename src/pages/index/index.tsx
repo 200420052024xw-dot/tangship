@@ -44,8 +44,10 @@ const IndexPage: FC = () => {
       Network.request({ url: '/api/content/vehicles' }),
       Network.request({ url: '/api/content/banners' }),
     ]).then(([vehicleResponse, bannerResponse]) => {
-      setCatalog(((vehicleResponse.data as any)?.data || []) as Vehicle[])
-      setBanners(((bannerResponse.data as any)?.data || []) as BannerItem[])
+      const vehicleData = (vehicleResponse.data as any)?.data
+      const bannerData = (bannerResponse.data as any)?.data
+      setCatalog((vehicleData || []) as Vehicle[])
+      setBanners((bannerData || []) as BannerItem[])
     }).catch(() => {
       Taro.showToast({ title: '车型数据加载失败', icon: 'none' })
     }).finally(() => setLoadingCatalog(false))
