@@ -7,11 +7,17 @@ import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Se
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 
+type Address = {
+  role: string; contactName: string; phone: string
+  formattedAddress: string; detailAddress: string
+}
+type Quote = { baseFeeCents: number; distanceFeeCents: number; vehicleFeeCents: number; serviceFeeCents: number; discountCents: number; totalFeeCents: number }
+type OrderItem = { category: string; name: string; quantity: number; estimatedWeightKg: number }
 type Order = {
-  id: string; orderNo: string; vehicleId: string; mode: string; status: string
-  createdAt: string; quoteExpiresAt?: string
-  sender?: { formattedAddress: string }; receiver?: { formattedAddress: string }
-  quote?: { totalCents: number }
+  id: string; orderNo: string; vehicleId: string; vehicleName?: string
+  mode: string; status: string; pickupType: string
+  createdAt: string; scheduledAt?: string; quoteExpiresAt?: string
+  addresses: Address[]; items: OrderItem[]; quote: Quote | null
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Clock3 }> = {
@@ -48,7 +54,42 @@ function formatCents(cents: number) {
 
 export default function OrdersPage() {
   const { data: orders, loading, refresh } = useSWR<Order[]>(
-    'my-orders', () => consumerRequest({ url: '/api/orders' }), 'dynamic'
+    'my-orders',
+    async () => {
+      const raw: any[] = await consumerRequest({ url: '/api/orders' })
+      return raw.map((o: any) => ({
+        ...o,
+        orderNo: o.order_no,
+        vehicleId: o.vehicle_id,
+        vehicleName: o.vehicle_name,
+        pickupType: o.pickup_type,
+        createdAt: o.created_at,
+        scheduledAt: o.scheduled_at,
+        quoteExpiresAt: o.quote_expires_at,
+        addresses: (o.addresses || []).map((a: any) => ({
+          ...a,
+          contactName: a.contact_name,
+          formattedAddress: a.formatted_address,
+          detailAddress: a.detail_address,
+        })),
+        items: (o.items || []).map((i: any) => ({
+          ...i,
+          estimatedWeightKg: i.estimated_weight_kg,
+        })),
+        quote: o.quote ? {
+          ...o.quote,
+          baseFeeCents: o.quote.base_fee_cents,
+          distanceFeeCents: o.quote.distance_fee_cents,
+          vehicleFeeCents: o.quote.vehicle_fee_cents,
+          serviceFeeCents: o.quote.service_fee_cents,
+          discountCents: o.quote.discount_cents,
+          totalFeeCents: o.quote.total_fee_cents,
+          distanceMeters: o.quote.distance_meters,
+          expiresAt: o.quote.expires_at,
+        } : null,
+      }))
+    },
+    'dynamic'
   )
   useDidShow(() => { refresh() })
 
@@ -78,12 +119,21 @@ export default function OrdersPage() {
           {orderList.map(order => {
             const sc = statusConfig[order.status] || { label: order.status, color: 'text-slate-500', bg: 'bg-slate-50', icon: Clock3 }
             const StatusIcon = sc.icon
+            const sender = order.addresses?.find(a => a.role === 'sender')
+            const receiver = order.addresses?.find(a => a.role === 'receiver')
+            const itemSummary = order.items?.length ? `${order.items[0].name}等${order.items.reduce((s, i) => s + i.quantity, 0)}件` : ''
             return (
               <Card key={order.id} onClick={() => Taro.navigateTo({ url: `/pages/order/detail/index?id=${order.id}` }).catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))}>
                 <CardContent className="p-4">
-                  {/* 第一行：单号 + 状态 */}
+                  {/* 第一行：车型名 + 状态标签 */}
                   <View className="flex flex-row items-center justify-between">
-                    <Text className="block text-sm font-medium text-slate-700">{order.orderNo}</Text>
+                    <View className="flex flex-row items-center gap-2">
+                      <Truck size={16} color="#475569" />
+                      <Text className="block text-sm font-semibold text-slate-800">{order.vehicleName || order.vehicleId}</Text>
+                      <View className="px-2 py-1 bg-slate-100 rounded">
+                        <Text className="text-[10px] text-slate-500">{modeLabels[order.mode] || order.mode}</Text>
+                      </View>
+                    </View>
                     <View className="flex flex-row items-center gap-1">
                       <StatusIcon size={14} color={sc.color === 'text-amber-600' ? '#d97706' : sc.color === 'text-blue-600' ? '#2563eb' : sc.color === 'text-emerald-600' ? '#059669' : sc.color === 'text-red-500' ? '#ef4444' : sc.color === 'text-violet-600' ? '#7c3aed' : sc.color === 'text-indigo-600' ? '#4f46e5' : sc.color === 'text-orange-500' ? '#f97316' : '#94a3b8'} />
                       <Badge className={`${sc.bg} ${sc.color} border-0`}>{sc.label}</Badge>
@@ -94,27 +144,21 @@ export default function OrdersPage() {
                   <View className="mt-3 flex flex-row items-start gap-2">
                     <View className="flex flex-col items-center gap-1 pt-1">
                       <Send size={12} color="#059669" />
-                      <View className="w-1 h-4 bg-slate-200" />
+                      <View className="w-px h-4 bg-slate-200" />
                       <MapPin size={12} color="#2563eb" />
                     </View>
                     <View className="flex-1 min-w-0">
-                      <Text className="block text-xs text-slate-600 truncate">{order.sender?.formattedAddress || '寄件地址'}</Text>
-                      <Text className="block text-xs text-slate-600 mt-2 truncate">{order.receiver?.formattedAddress || '收件地址'}</Text>
+                      <Text className="block text-xs text-slate-600 truncate">{sender?.formattedAddress || '寄件地址'}</Text>
+                      <Text className="block text-xs text-slate-600 mt-2 truncate">{receiver?.formattedAddress || '收件地址'}</Text>
                     </View>
                   </View>
 
-                  {/* 第三行：车型+模式+费用+时间 */}
+                  {/* 第三行：物品摘要+费用+时间 */}
                   <View className="mt-3 flex flex-row items-center justify-between">
-                    <View className="flex flex-row items-center gap-2">
-                      <Truck size={14} color="#64748b" />
-                      <Text className="block text-xs text-slate-500">{order.vehicleId}</Text>
-                      <View className="px-2 py-1 bg-slate-100 rounded">
-                        <Text className="text-[10px] text-slate-500">{modeLabels[order.mode] || order.mode}</Text>
-                      </View>
-                    </View>
+                    <Text className="block text-xs text-slate-400 truncate max-w-[50%]">{itemSummary}</Text>
                     <View className="flex flex-row items-center gap-3">
-                      {order.quote?.totalCents != null && (
-                        <Text className="block text-sm font-semibold text-blue-600">{formatCents(order.quote.totalCents)}</Text>
+                      {order.quote?.totalFeeCents != null && (
+                        <Text className="block text-sm font-semibold text-blue-600">{formatCents(order.quote.totalFeeCents)}</Text>
                       )}
                       <Text className="block text-xs text-slate-400">{formatTime(order.createdAt)}</Text>
                     </View>

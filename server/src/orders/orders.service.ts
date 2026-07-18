@@ -95,13 +95,58 @@ export class OrdersService {
     const cached = serverCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
-    const { data, error } = await this.getClient().from('orders')
-      .select('id, order_no, vehicle_id, status, pickup_type, scheduled_at, scheduled_end_at, created_at')
+    const client = this.getClient();
+    // 1. 查订单主表（含 mode/物品摘要字段）
+    const { data: orders, error } = await client.from('orders')
+      .select('id, order_no, vehicle_id, mode, status, pickup_type, scheduled_at, scheduled_end_at, created_at, updated_at')
       .eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw new Error(`查询订单失败: ${error.message}`);
 
-    serverCache.set(cacheKey, data, CACHE_TTL.DYNAMIC);
-    return data;
+    if (!orders || orders.length === 0) {
+      serverCache.set(cacheKey, [], CACHE_TTL.DYNAMIC);
+      return [];
+    }
+
+    // 2. 批量查关联数据（地址 + 物品 + 最新报价 + 车型名称）
+    const orderIds = orders.map(o => o.id);
+    const vehicleIds = [...new Set(orders.map(o => o.vehicle_id))];
+    const [addrRes, itemRes, quoteRes, vehicleRes] = await Promise.all([
+      client.from('order_addresses').select('order_id, role, contact_name, phone, formatted_address, detail_address').in('order_id', orderIds),
+      client.from('order_items').select('order_id, category, name, quantity, estimated_weight_kg').in('order_id', orderIds),
+      client.from('order_quotes').select('order_id, total_fee_cents').in('order_id', orderIds).order('created_at', { ascending: false }),
+      client.from('vehicle_catalog').select('id, name').in('id', vehicleIds),
+    ]);
+
+    // 3. 组装
+    const addrMap = new Map<string, any[]>();
+    for (const a of (addrRes.data || [])) {
+      if (!addrMap.has(a.order_id)) addrMap.set(a.order_id, []);
+      addrMap.get(a.order_id)!.push(a);
+    }
+    const itemMap = new Map<string, any[]>();
+    for (const i of (itemRes.data || [])) {
+      if (!itemMap.has(i.order_id)) itemMap.set(i.order_id, []);
+      itemMap.get(i.order_id)!.push(i);
+    }
+    const quoteMap = new Map<string, any>();
+    for (const q of (quoteRes.data || [])) {
+      if (!quoteMap.has(q.order_id)) quoteMap.set(q.order_id, q); // 只取最新一条
+    }
+    const vehicleNameMap = new Map<string, string>();
+    for (const v of (vehicleRes.data || [])) {
+      vehicleNameMap.set(v.id, v.name);
+    }
+
+    const result = orders.map(o => ({
+      ...o,
+      vehicle_name: vehicleNameMap.get(o.vehicle_id) || o.vehicle_id,
+      addresses: addrMap.get(o.id) || [],
+      items: itemMap.get(o.id) || [],
+      quote: quoteMap.get(o.id) || null,
+    }));
+
+    serverCache.set(cacheKey, result, CACHE_TTL.DYNAMIC);
+    return result;
   }
 
   async detail(userId: string, id: string) {
