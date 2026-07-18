@@ -423,11 +423,11 @@ const AddressEditPage: FC = () => {
         </CardContent>
       </Card>
 
-      {/* 底部保存按钮(bottom:50 避开 TabBar,inline style 兼容 H5) */}
+      {/* 底部保存按钮(inline style 兼容 H5) */}
       <View
         style={{
           position: 'fixed',
-          bottom: 50,
+          bottom: 0,
           left: 0,
           right: 0,
           display: 'flex',

@@ -85,7 +85,7 @@ const SelectVehiclePage: FC = () => {
   return (
     <View className="min-h-screen bg-slate-50 pb-28">
       {/* 顶部标题栏 */}
-      <View className="sticky top-0 z-10 bg-white border-b border-slate-100">
+      <View style={{ position: 'sticky', top: 0, zIndex: 10 }} className="bg-white border-b border-slate-100">
         <View className="flex items-center px-4 h-12">
           <View className="flex items-center gap-2" onClick={handleBack}>
             <ArrowLeft size={18} color="#1E293B" />
@@ -153,7 +153,7 @@ const SelectVehiclePage: FC = () => {
       <View
         style={{
           position: 'fixed',
-          bottom: 50,
+          bottom: 0,
           left: 0,
           right: 0,
           padding: '12px 16px',

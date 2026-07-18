@@ -157,7 +157,7 @@ const MonthlyInquiryPage: FC = () => {
   return (
     <View className="min-h-screen bg-slate-50 pb-28">
       {/* 顶部标题栏 */}
-      <View className="sticky top-0 z-10 bg-white border-b border-slate-100">
+      <View style={{ position: 'sticky', top: 0, zIndex: 10 }} className="bg-white border-b border-slate-100">
         <View className="flex items-center px-4 h-12">
           <View className="flex items-center gap-2" onClick={handleBack}>
             <ArrowLeft size={18} color="#1E293B" />
@@ -245,7 +245,7 @@ const MonthlyInquiryPage: FC = () => {
       {/* 底部操作栏 */}
       <View
         style={{
-          position: 'fixed', bottom: 50, left: 0, right: 0,
+          position: 'fixed', bottom: 0, left: 0, right: 0,
           padding: '12px 16px',
           paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
           backgroundColor: '#fff', borderTop: '1px solid #e5e5e5', zIndex: 100,

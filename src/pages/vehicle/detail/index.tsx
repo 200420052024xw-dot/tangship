@@ -352,7 +352,7 @@ const VehicleDetailPage: FC = () => {
       <View
         style={{
           position: 'fixed',
-          bottom: 50,
+          bottom: 0,
           left: 0,
           right: 0,
           padding: '12px 16px',
