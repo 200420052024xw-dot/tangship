@@ -273,7 +273,7 @@ const OrderCreatePage: FC = () => {
         </View>
 
         {/* 寄件 / 收件 — 统一卡片 */}
-        <View className="bg-white rounded-xl overflow-hidden">
+        <View className="bg-white rounded-xl border border-slate-200">
           <View id={SECTION_IDS.sender}>
             <AddressCard
               role="sender"

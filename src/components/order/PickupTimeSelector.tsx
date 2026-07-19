@@ -2,33 +2,32 @@
  * 用车时间选择
  *
  * - 立即用车 / 预约用车
- * - 预约用车:日期 + 时间段(半小时/1 小时/2 小时/自定义起止)
- * - 准备时间常量定义在常量区,UI 仅消费
+ * - 预约用车：选择日期（今天/明天/后天）+ 选择时间段（每半小时一个时段）
+ * - 用户选择，不让用户填写
  */
 
 import { View, Text } from '@tarojs/components'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Input } from '@/components/ui/input'
 import { Clock, Zap, Calendar } from 'lucide-react-taro'
 import type { PickupType, TimeSlot } from '@/types/order'
 
 /**
- * 准备时间常量 — 不在 UI 中散落魔法数字
+ * 准备时间常量
  */
 export const PREP_MINUTES = {
-  immediate: 30, // 立即用车:最少 30 分钟准备
-  scheduled: 60, // 预约用车:最少 60 分钟间隔
+  immediate: 30,
+  scheduled: 60,
 }
 
-const TIME_SLOTS = [
-  { label: '半小时内', minutes: 30 },
-  { label: '1 小时内', minutes: 60 },
-  { label: '2 小时内', minutes: 120 },
-  { label: '4 小时内', minutes: 240 },
-]
+/** 可预约天数：今天 + 明天 + 后天 = 3天 */
+const BOOKABLE_DAYS = 3
+
+/** 时间段起始小时（6:00 起至 22:00） */
+const START_HOUR = 6
+const END_HOUR = 22
 
 interface Props {
   pickupType: PickupType
@@ -43,17 +42,58 @@ function toLocalISO(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function toHHmm(d: Date): string {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+function toHHmm(h: number, m: number): string {
+  return `${pad(h)}:${pad(m)}`
 }
 
-function todayDate(): string {
-  return toLocalISO(new Date())
+/** 获取可预约日期列表 */
+function getBookableDates(): { label: string; value: string }[] {
+  const result: { label: string; value: string }[] = []
+  const now = new Date()
+  const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+  for (let i = 0; i < BOOKABLE_DAYS; i++) {
+    const d = new Date(now)
+    d.setDate(d.getDate() + i)
+    const dateStr = toLocalISO(d)
+    let label: string
+    if (i === 0) label = '今天'
+    else if (i === 1) label = '明天'
+    else if (i === 2) label = '后天'
+    else label = weekDays[d.getDay()]
+
+    label += ` ${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+    result.push({ label, value: dateStr })
+  }
+  return result
 }
 
-function nowPlusMinutes(min: number): { date: string; time: string } {
-  const d = new Date(Date.now() + min * 60_000)
-  return { date: toLocalISO(d), time: toHHmm(d) }
+/** 获取半小时时段列表 */
+function getHalfHourSlots(dateStr: string): { label: string; start: string; end: string }[] {
+  const slots: { label: string; start: string; end: string }[] = []
+  const now = new Date()
+  const isToday = dateStr === toLocalISO(now)
+
+  for (let h = START_HOUR; h < END_HOUR; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const start = toHHmm(h, m)
+      const endMin = m + 30
+      const endH = endMin >= 60 ? h + 1 : h
+      const endM = endMin >= 60 ? 0 : endMin
+      const end = toHHmm(endH, endM)
+
+      // 今天：跳过已过去的时间段（至少提前1小时）
+      if (isToday) {
+        const slotTime = new Date(now)
+        slotTime.setHours(h, m, 0, 0)
+        const minTime = new Date(now.getTime() + PREP_MINUTES.scheduled * 60_000)
+        if (slotTime < minTime) continue
+      }
+
+      slots.push({ label: `${start}-${end}`, start, end })
+    }
+  }
+  return slots
 }
 
 export const PickupTimeSelector: FC<Props> = ({
@@ -62,43 +102,50 @@ export const PickupTimeSelector: FC<Props> = ({
   onPickupTypeChange,
   onScheduledSlotChange,
 }) => {
-  // 预约用车:初始化默认值
+  const bookableDates = useMemo(() => getBookableDates(), [])
+  const timeSlots = useMemo(
+    () => getHalfHourSlots(scheduledSlot?.date || bookableDates[0]?.value || ''),
+    [scheduledSlot?.date, bookableDates],
+  )
+
+  // 预约用车：初始化默认值
   useEffect(() => {
     if (pickupType !== 'scheduled') return
     if (scheduledSlot) return
-    const init = nowPlusMinutes(PREP_MINUTES.scheduled)
-    const end = new Date(Date.now() + (PREP_MINUTES.scheduled + 60) * 60_000)
+    const defaultDate = bookableDates[0]?.value
+    if (!defaultDate) return
+    const defaultSlot = getHalfHourSlots(defaultDate)[0]
+    if (defaultSlot) {
+      onScheduledSlotChange({
+        date: defaultDate,
+        startTime: defaultSlot.start,
+        endTime: defaultSlot.end,
+      })
+    }
+  }, [pickupType, scheduledSlot, onPickupTypeChange, bookableDates])
+
+  const handleDateSelect = (dateValue: string) => {
+    const firstSlot = getHalfHourSlots(dateValue)[0]
     onScheduledSlotChange({
-      date: init.date,
-      startTime: init.time,
-      endTime: toHHmm(end),
+      date: dateValue,
+      startTime: firstSlot?.start || '08:00',
+      endTime: firstSlot?.end || '08:30',
     })
-  }, [pickupType, scheduledSlot, onScheduledSlotChange])
+  }
 
-  const handlePickRelative = (minutes: number) => {
-    const slot = nowPlusMinutes(PREP_MINUTES.scheduled)
-    const end = new Date(Date.now() + (PREP_MINUTES.scheduled + minutes) * 60_000)
+  const handleSlotSelect = (slot: { start: string; end: string }) => {
+    if (!scheduledSlot) return
     onScheduledSlotChange({
-      date: slot.date,
-      startTime: slot.time,
-      endTime: toHHmm(end),
+      ...scheduledSlot,
+      startTime: slot.start,
+      endTime: slot.end,
     })
   }
 
-  const handleDateChange = (date: string) => {
-    if (!scheduledSlot) return
-    onScheduledSlotChange({ ...scheduledSlot, date })
-  }
-
-  const handleStartTimeChange = (startTime: string) => {
-    if (!scheduledSlot) return
-    onScheduledSlotChange({ ...scheduledSlot, startTime })
-  }
-
-  const handleEndTimeChange = (endTime: string) => {
-    if (!scheduledSlot) return
-    onScheduledSlotChange({ ...scheduledSlot, endTime })
-  }
+  /** 当前选中的时段key */
+  const selectedSlotKey = scheduledSlot
+    ? `${scheduledSlot.startTime}-${scheduledSlot.endTime}`
+    : ''
 
   return (
     <Card className="mb-3">
@@ -135,7 +182,7 @@ export const PickupTimeSelector: FC<Props> = ({
         {pickupType === 'immediate' && (
           <View className="bg-blue-50 rounded-lg p-3">
             <Text className="block text-sm text-blue-700">
-              立即用车:服务端将在约 {PREP_MINUTES.immediate} 分钟内确认可用时间
+              立即用车：服务端将在约 {PREP_MINUTES.immediate} 分钟内确认可用时间
             </Text>
           </View>
         )}
@@ -143,64 +190,58 @@ export const PickupTimeSelector: FC<Props> = ({
         {/* 预约用车 */}
         {pickupType === 'scheduled' && (
           <View className="space-y-3">
+            {/* 日期选择 */}
             <View>
-              <Text className="block text-sm font-medium text-slate-700 mb-2">快捷时段</Text>
-              <View className="grid grid-cols-2 gap-2">
-                {TIME_SLOTS.map(s => (
-                  <View
-                    key={s.minutes}
-                    className="bg-slate-50 rounded-lg py-2 px-3 text-center active:bg-blue-50"
-                    onClick={() => handlePickRelative(s.minutes)}
-                  >
-                    <Text className="block text-sm text-slate-700">{s.label}</Text>
-                  </View>
-                ))}
+              <Text className="block text-sm font-medium text-slate-700 mb-2">选择日期</Text>
+              <View className="flex gap-2">
+                {bookableDates.map(d => {
+                  const isSelected = scheduledSlot?.date === d.value
+                  return (
+                    <View
+                      key={d.value}
+                      className={`flex-1 rounded-lg py-2 px-1 text-center ${isSelected ? 'bg-blue-500' : 'bg-slate-50 active:bg-blue-50'}`}
+                      onClick={() => handleDateSelect(d.value)}
+                    >
+                      <Text className={`block text-sm ${isSelected ? 'text-white font-medium' : 'text-slate-700'}`}>
+                        {d.label}
+                      </Text>
+                    </View>
+                  )
+                })}
               </View>
             </View>
 
-            <View className="grid grid-cols-3 gap-2">
-              <View>
-                <Text className="block text-xs text-slate-500 mb-1">日期</Text>
-                <View className="bg-slate-50 rounded-lg px-2 py-1">
-                  <Input
-                    className="w-full bg-transparent border-0 text-sm"
-                    type="text"
-                    placeholder={todayDate()}
-                    value={scheduledSlot?.date || ''}
-                    onInput={(e) => handleDateChange(e.detail.value)}
-                  />
+            {/* 时间段选择 */}
+            <View>
+              <Text className="block text-sm font-medium text-slate-700 mb-2">选择时段</Text>
+              {timeSlots.length === 0 ? (
+                <View className="bg-slate-50 rounded-lg p-3">
+                  <Text className="block text-sm text-slate-500">当天可预约时段已满，请选择其他日期</Text>
                 </View>
-              </View>
-              <View>
-                <Text className="block text-xs text-slate-500 mb-1">起</Text>
-                <View className="bg-slate-50 rounded-lg px-2 py-1">
-                  <Input
-                    className="w-full bg-transparent border-0 text-sm"
-                    type="text"
-                    placeholder="HH:mm"
-                    value={scheduledSlot?.startTime || ''}
-                    onInput={(e) => handleStartTimeChange(e.detail.value)}
-                  />
+              ) : (
+                <View className="grid grid-cols-3 gap-2">
+                  {timeSlots.map(slot => {
+                    const key = `${slot.start}-${slot.end}`
+                    const isSelected = key === selectedSlotKey
+                    return (
+                      <View
+                        key={key}
+                        className={`rounded-lg py-2 px-1 text-center ${isSelected ? 'bg-blue-500' : 'bg-slate-50 active:bg-blue-50'}`}
+                        onClick={() => handleSlotSelect(slot)}
+                      >
+                        <Text className={`block text-xs ${isSelected ? 'text-white font-medium' : 'text-slate-700'}`}>
+                          {slot.label}
+                        </Text>
+                      </View>
+                    )
+                  })}
                 </View>
-              </View>
-              <View>
-                <Text className="block text-xs text-slate-500 mb-1">止</Text>
-                <View className="bg-slate-50 rounded-lg px-2 py-1">
-                  <Input
-                    className="w-full bg-transparent border-0 text-sm"
-                    type="text"
-                    placeholder="HH:mm"
-                    value={scheduledSlot?.endTime || ''}
-                    onInput={(e) => handleEndTimeChange(e.detail.value)}
-                  />
-                </View>
-              </View>
+              )}
             </View>
 
             <View className="bg-amber-50 rounded-lg p-3">
               <Text className="block text-xs text-amber-700">
-                预约时段需至少提前 {PREP_MINUTES.scheduled} 分钟;
-                最终可用时间以后端确认结果为准
+                预约时段需至少提前 {PREP_MINUTES.scheduled} 分钟；最终可用时间以后端确认结果为准
               </Text>
             </View>
           </View>

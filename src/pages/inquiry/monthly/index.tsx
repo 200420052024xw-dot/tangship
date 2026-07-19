@@ -171,7 +171,7 @@ const MonthlyInquiryPage: FC = () => {
         </Text>
 
         {/* 收发货地址 — 统一卡片 */}
-        <View className="bg-white rounded-xl overflow-hidden mb-3">
+        <View className="bg-white rounded-xl border border-slate-200 mb-3">
           <View className="px-4 pt-3 pb-2">
             <Text className="block text-base font-semibold text-slate-800">配送地址</Text>
           </View>
