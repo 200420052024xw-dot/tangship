@@ -185,7 +185,6 @@ const MonthlyInquiryPage: FC = () => {
             enabled={!!senderAddress && !!receiverAddress}
             onSwap={swapAddresses}
           />
-          <View className="mx-4 border-t border-dashed border-slate-200" />
           <AddressCard
             role="receiver"
             address={receiverAddress}
