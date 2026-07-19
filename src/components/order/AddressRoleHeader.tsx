@@ -24,13 +24,13 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
       className="relative flex items-center justify-center"
       style={{ height: 0, zIndex: 10 }}
     >
-      {/* 虚线 - 贯穿整行 */}
+      {/* 实线 - 贯穿整行 */}
       <View
         className="absolute left-0 right-0"
         style={{
           borderTopWidth: 1,
           borderTopColor: '#E2E8F0',
-          borderTopStyle: 'dashed',
+          borderTopStyle: 'solid',
         }}
       />
       {/* 方形按钮 - 居中悬浮，白色底遮住虚线 */}
