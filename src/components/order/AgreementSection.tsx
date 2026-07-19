@@ -9,7 +9,6 @@ import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FileText } from 'lucide-react-taro'
 
 interface Props {
   checked: boolean
@@ -52,10 +51,6 @@ export const AgreementSection: FC<Props> = ({ checked, onChange }) => {
               >
                 《禁运品说明》
               </Text>
-            </View>
-            <View className="flex items-center gap-1 mt-2 text-xs text-slate-400">
-              <FileText size={12} color="#94A3B8" />
-              <Text className="block">协议详情页将在下一阶段提供,此处仅做勾选</Text>
             </View>
           </View>
         </View>

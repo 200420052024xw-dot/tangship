@@ -126,7 +126,9 @@ export function useSWR<T>(
   const doFetch = useCallback(async (fetchKey: string) => {
     const fn = fetcherRef.current
     if (!fn) return
-    if (mountedRef.current) setLoading(true)
+    // SWR 后台刷新不应遮住已有数据；只有真正无缓存时才展示骨架屏。
+    const hasCachedData = useDataCache.getState().get(fetchKey) !== null
+    if (mountedRef.current) setLoading(!hasCachedData)
     if (mountedRef.current) setError(null)
     try {
       const result = await fn()

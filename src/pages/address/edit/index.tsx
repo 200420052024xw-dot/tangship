@@ -22,7 +22,9 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Card, CardContent } from '@/components/ui/card'
-import { MapPin, Pencil, ArrowLeft, TriangleAlert } from 'lucide-react-taro'
+import { PageHeader } from '@/components/layout/page-header'
+import { FixedActionBar } from '@/components/layout/fixed-action-bar'
+import { MapPin, Pencil, TriangleAlert } from 'lucide-react-taro'
 import type { Address, AddressUsage, AddressLabel } from '@/types/address'
 import { useAddressStore, createEmptyAddress } from '@/stores/address'
 import { isValidPhone, isNonEmptyString, isValidCoordinate, isWithinLength } from '@/utils/validators'
@@ -180,18 +182,9 @@ const AddressEditPage: FC = () => {
   }
 
   return (
-    <View className="min-h-screen bg-slate-50 pb-24">
+    <View className="min-h-screen bg-background pb-28">
       {/* 顶部标题 */}
-      <View className="sticky top-0 z-10 bg-white border-b border-slate-100">
-        <View className="flex items-center px-4 h-12">
-          <View className="flex items-center gap-2" onClick={handleBack}>
-            <ArrowLeft size={18} color="#1E293B" />
-            <Text className="block text-base font-medium text-slate-800">
-              {editId ? '编辑地址' : '新增地址'}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <PageHeader title={editId ? '编辑地址' : '新增地址'} onBack={handleBack} />
 
       {/* 联系人 */}
       <Card className="mx-4 mt-3 mb-3">
@@ -424,28 +417,15 @@ const AddressEditPage: FC = () => {
       </Card>
 
       {/* 底部保存按钮(inline style 兼容 H5) */}
-      <View
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          display: 'flex',
-          flexDirection: 'row',
-          padding: '12px 16px',
-          backgroundColor: '#fff',
-          borderTop: '1px solid #e5e5e5',
-          zIndex: 100,
-        }}
-      >
+      <FixedActionBar>
         <Button
-          className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+          className="h-12 w-full bg-primary text-white"
           disabled={saving}
           onClick={handleSave}
         >
           <Text className="block text-base">{saving ? '保存中…' : '保存地址'}</Text>
         </Button>
-      </View>
+      </FixedActionBar>
     </View>
   )
 }

@@ -17,6 +17,21 @@ const json = (v: any) => JSON.stringify(v);
 const parse = (v: string) => JSON.parse(v);
 const utc = () => new Date().toISOString();
 
+/**
+ * 真实车型图片 TOS Key 映射
+ * 这些图片已上传到 TOS 对象存储，用于替代 SVG 假图
+ */
+const REAL_VEHICLE_IMAGE_KEYS: Record<string, string> = {
+  'z5-2026': 'vehicles/z5-2026/Z5_8bb2d95a.png',
+  'z2': 'vehicles/z2/Z5lite_86f5074a.png',
+  'l5-max': 'vehicles/l5-max/Z5pro_589a0566.png',
+  'z5-c': 'vehicles/z5-c/Z5proLeng_Cang_Che_42d2ca0b.png',
+  'z5-multi': 'vehicles/z5-multi/Z5Huo_Ju_Che_4fccfbb0.png',
+  'z8': 'vehicles/z8/Z8_2b624379.png',
+  'z8-max': 'vehicles/z8-max/Z8Xiang_Shi_Che_38d2b381.png',
+  'z8-max-c': 'vehicles/z8-max-c/Z8_Leng_Cang_Che_d07d8608.png',
+};
+
 @Injectable()
 export class OperationsService implements OnModuleInit {
   constructor(private supabase: SupabaseService, private storage: StorageService) {}
@@ -63,6 +78,8 @@ export class OperationsService implements OnModuleInit {
       const { data: existingBanners } = await client.from('content_banners').select('id').limit(1).maybeSingle();
       if (!existingBanners) await this.seedBanners();
     }
+    // 将数据库中残留的 SVG 假图替换为 TOS 真实图片
+    await this.replaceSvgImagesWithReal();
   }
 
   async listVehicles(admin = false, serviceMode?: string) {
@@ -77,15 +94,24 @@ export class OperationsService implements OnModuleInit {
     if (serviceMode) query = query.eq('service_mode', serviceMode);
     const [{ data: rows, error }, { data: allImgs }] = await Promise.all([
       query,
-      client.from('vehicle_images').select('vehicle_id, url, is_primary, sort_order'),
+      client.from('vehicle_images').select('vehicle_id, url, object_key, is_primary, sort_order'),
     ]);
     if (error) throw new Error(`查询车型失败: ${error.message}`);
 
-    // 按车型分组图片
+    // 按车型分组图片，对有 TOS key 的图片动态生成签名 URL
     const imgMap = new Map<string, string[]>();
     for (const img of (allImgs || [])) {
       const list = imgMap.get(img.vehicle_id) || [];
-      list.push(img.url);
+      let url = img.url;
+      // 如果有 TOS object_key，动态生成签名 URL（避免签名过期）
+      if (img.object_key && img.object_key.length > 0) {
+        try {
+          url = await this.storage.getSignedUrl(img.object_key, 86400); // 24 小时有效期
+        } catch {
+          // 签名失败时 fallback 到数据库中存储的 URL
+        }
+      }
+      list.push(url);
       imgMap.set(img.vehicle_id, list);
     }
 
@@ -227,9 +253,9 @@ export class OperationsService implements OnModuleInit {
     return this.pricing();
   }
 
-  preview(input: any, useDraft = false) {
-    const state = this.pricing(); // Note: sync call - should be async but keeping compat
-    const config = (useDraft ? (state as any).draft?.config : (state as any).published?.config) || DEFAULT_PRICING;
+  async preview(input: any, useDraft = false) {
+    const state = await this.pricing();
+    const config = (useDraft ? state.draft?.config : state.published?.config) || DEFAULT_PRICING;
     return this.calculate(config, input);
   }
 
@@ -292,14 +318,34 @@ export class OperationsService implements OnModuleInit {
   private async seedVehicleImages() {
     const client = this.getClient();
     const t = utc();
-    const configs: [string, string, string][] = [
-      ['z2', '#3B82F6', '🚗'], ['z5-2026', '#10B981', '🚐'], ['l5', '#8B5CF6', '🚚'],
-      ['l5-max', '#7C3AED', '🚛'], ['z8', '#F59E0B', '🚛'], ['z8-max', '#D97706', '🚛'],
-      ['z5-c', '#06B6D4', '❄️'], ['z8-max-c', '#0891B2', '❄️'], ['z5-multi', '#EC4899', '📦'],
+    // SVG 假图 fallback 配置（仅用于无真实图片的车型）
+    const svgFallbacks: [string, string, string][] = [
+      ['l5', '#8B5CF6', '🚚'],
       ['z8-chassis', '#64748B', '🔧'], ['z5-security', '#EF4444', '🛡️'], ['yokee', '#F97316', '🚌'],
       ['l4-kit', '#6366F1', '⚙️'],
     ];
-    for (const [vehicleId, color, icon] of configs) {
+    // 先处理有真实 TOS 图片的车型
+    for (const [vehicleId, tosKey] of Object.entries(REAL_VEHICLE_IMAGE_KEYS)) {
+      const { data: vehicle } = await client.from('vehicle_catalog').select('id').eq('id', vehicleId).maybeSingle();
+      if (!vehicle) continue;
+      try {
+        const url = await this.storage.getSignedUrl(tosKey, 31536000); // 1 年有效期
+        await client.from('vehicle_images').insert({
+          id: randomUUID(), vehicle_id: vehicleId, url, object_key: tosKey,
+          is_primary: 1, sort_order: 0, created_at: t,
+        });
+      } catch (e) {
+        console.error(`Seed real image for ${vehicleId} failed, falling back to SVG:`, e.message);
+        const name = CANONICAL_VEHICLES.find(v => v.id === vehicleId)?.name || vehicleId;
+        const color = vehicleId.startsWith('z5') ? '#10B981' : vehicleId.startsWith('z8') ? '#F59E0B' : '#3B82F6';
+        await client.from('vehicle_images').insert({
+          id: randomUUID(), vehicle_id: vehicleId, url: this.vehicleSvg(name, color, '🚐'), object_key: '',
+          is_primary: 1, sort_order: 0, created_at: t,
+        });
+      }
+    }
+    // 再处理无真实图片的车型（使用 SVG 假图）
+    for (const [vehicleId, color, icon] of svgFallbacks) {
       const { data: vehicle } = await client.from('vehicle_catalog').select('id').eq('id', vehicleId).maybeSingle();
       if (!vehicle) continue;
       const url = this.vehicleSvg(CANONICAL_VEHICLES.find(v => v.id === vehicleId)?.name || vehicleId, color, icon);
@@ -307,6 +353,53 @@ export class OperationsService implements OnModuleInit {
         id: randomUUID(), vehicle_id: vehicleId, url, object_key: '',
         is_primary: 1, sort_order: 0, created_at: t,
       });
+    }
+  }
+
+  /** 将数据库中残留的假图（SVG / 通用占位图）替换为 TOS 真实图片，并为缺少图片的车型补录 */
+  private async replaceSvgImagesWithReal() {
+    const client = this.getClient();
+    const PLACEHOLDER_PATTERN = /coze_storage_|data:image\/svg\+xml/i;
+    const { data: allImages } = await client.from('vehicle_images').select('id, vehicle_id, url, object_key, is_primary');
+    if (!allImages) return;
+
+    // 1. 替换已有假图记录（包括月租车型如 z5-2026-monthly → z5-2026）
+    for (const img of allImages) {
+      const isFake = !img.url || PLACEHOLDER_PATTERN.test(img.url) || !img.object_key;
+      if (!isFake) continue; // 已有真实图片，跳过
+      const baseVehicleId = img.vehicle_id.replace(/-monthly$/, '');
+      const tosKey = REAL_VEHICLE_IMAGE_KEYS[baseVehicleId] || REAL_VEHICLE_IMAGE_KEYS[img.vehicle_id];
+      if (!tosKey) continue; // 无真实图片的车型保留假图
+
+      try {
+        const url = await this.storage.getSignedUrl(tosKey, 31536000);
+        await client.from('vehicle_images').update({ url, object_key: tosKey }).eq('id', img.id);
+        console.log(`[VehicleImage] Replaced fake image for ${img.vehicle_id} with TOS real image`);
+      } catch (e) {
+        console.error(`[VehicleImage] Failed to replace for ${img.vehicle_id}:`, e.message);
+      }
+    }
+
+    // 2. 为有真实图片但缺少记录的车型补录（含月租变体）
+    const vehiclesWithImages = new Set(allImages.map(i => i.vehicle_id));
+    const t = utc();
+    for (const [baseId, tosKey] of Object.entries(REAL_VEHICLE_IMAGE_KEYS)) {
+      // 检查 base 和 -monthly 变体
+      for (const vehicleId of [baseId, `${baseId}-monthly`]) {
+        if (vehiclesWithImages.has(vehicleId)) continue;
+        const { data: vehicle } = await client.from('vehicle_catalog').select('id').eq('id', vehicleId).maybeSingle();
+        if (!vehicle) continue;
+        try {
+          const url = await this.storage.getSignedUrl(tosKey, 31536000);
+          await client.from('vehicle_images').insert({
+            id: randomUUID(), vehicle_id: vehicleId, url, object_key: tosKey,
+            is_primary: 1, sort_order: 0, created_at: t,
+          });
+          console.log(`[VehicleImage] Created real image for ${vehicleId}`);
+        } catch (e) {
+          console.error(`[VehicleImage] Failed to create for ${vehicleId}:`, e.message);
+        }
+      }
     }
   }
 

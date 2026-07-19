@@ -26,10 +26,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { MapPin, Plus, Pencil, Trash2, MapPinHouse, ArrowLeft } from 'lucide-react-taro'
+import { MapPin, Plus, Pencil, Trash2, MapPinHouse } from 'lucide-react-taro'
 import type { Address, AddressUsage } from '@/types/address'
 import { useAddressStore } from '@/stores/address'
 import { toAddressDisplay } from '@/utils/address'
+import { PageHeader } from '@/components/layout/page-header'
 
 const USAGE_LABELS: Record<AddressUsage, string> = {
   sender: '寄件',
@@ -106,24 +107,15 @@ const AddressListPage: FC = () => {
   }
 
   return (
-    <View className="min-h-screen bg-slate-50">
+    <View className="min-h-screen bg-background">
       {/* 顶部标题栏 */}
-      <View className="sticky top-0 z-10 bg-white border-b border-slate-100">
-        <View className="flex items-center justify-between px-4 h-12">
-          <View className="flex items-center gap-2" onClick={handleBack}>
-            <ArrowLeft size={18} color="#1E293B" />
-            <Text className="block text-base font-medium text-slate-800">
-              {selectMode ? `选择${USAGE_LABELS[usage]}地址` : '地址簿'}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <PageHeader title={selectMode ? `选择${USAGE_LABELS[usage]}地址` : '地址簿'} onBack={handleBack} />
 
       {/* 新增按钮 */}
       <View className="p-4">
         {loading && <Text className="block text-center text-sm text-slate-400 mb-3">正在加载地址…</Text>}
         <Button
-          className="w-full h-10 bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
+          className="h-11 w-full border-primary bg-white text-primary"
           variant="outline"
           onClick={handleAdd}
         >
@@ -150,7 +142,7 @@ const AddressListPage: FC = () => {
             return (
               <Card
                 key={address.id}
-                className="cursor-pointer active:bg-slate-50 transition-colors"
+                className="cursor-pointer transition-colors active:bg-slate-50"
                 onClick={() => handleSelect(address)}
               >
                 <CardContent className="p-4">

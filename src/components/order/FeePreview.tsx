@@ -1,63 +1,96 @@
-/**
- * 费用预览 — 不显示最终成交价
- *
- * - 仅展示价格构成说明
- * - 明确提示"最终费用将在服务端核验路线、车型、货物和时间后计算"
- * - 显示"待核价"占位
- */
-
-import { View, Text } from '@tarojs/components'
+import { Text, View } from '@tarojs/components'
+import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Receipt, Info } from 'lucide-react-taro'
+import { Receipt } from 'lucide-react-taro'
+import { consumerRequest } from '@/services/consumer-api'
+import type { Address } from '@/types/address'
+import type { GoodsInfo, PickupType, TimeSlot } from '@/types/order'
 import type { Vehicle } from '@/types/vehicle'
 
-interface Props {
+interface FeePreviewProps {
   vehicle: Vehicle | null
+  senderAddress: Address | null
+  receiverAddress: Address | null
+  goods: GoodsInfo | null
+  pickupType: PickupType
+  scheduledSlot: TimeSlot | null
 }
 
-export const FeePreview: FC<Props> = ({ vehicle }) => {
+interface PricingPreview {
+  totalCents: number
+}
+
+function distanceMeters(sender: Address, receiver: Address) {
+  const toRadians = (value: number) => value * Math.PI / 180
+  const earthRadius = 6371000
+  const latitudeDelta = toRadians(receiver.latitude - sender.latitude)
+  const longitudeDelta = toRadians(receiver.longitude - sender.longitude)
+  const senderLatitude = toRadians(sender.latitude)
+  const receiverLatitude = toRadians(receiver.latitude)
+  const value = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(senderLatitude) * Math.cos(receiverLatitude) * Math.sin(longitudeDelta / 2) ** 2
+  return Math.round(earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)))
+}
+
+export const FeePreview: FC<FeePreviewProps> = ({
+  vehicle,
+  senderAddress,
+  receiverAddress,
+  goods,
+  pickupType,
+  scheduledSlot,
+}) => {
+  const [totalCents, setTotalCents] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const input = useMemo(() => {
+    if (!vehicle || !senderAddress || !receiverAddress) return null
+    const validCoordinates = [senderAddress.longitude, senderAddress.latitude, receiverAddress.longitude, receiverAddress.latitude]
+      .every(value => Number.isFinite(value) && value !== 0)
+    if (!validCoordinates) return null
+    const hour = pickupType === 'scheduled' && scheduledSlot ? Number(scheduledSlot.startTime.split(':')[0]) : new Date().getHours()
+    return {
+      vehicleId: vehicle.id,
+      distanceMeters: distanceMeters(senderAddress, receiverAddress),
+      weightKg: goods ? goods.estimatedWeightKg * goods.quantity : 0,
+      coldChain: Boolean(vehicle.specs.temperatureRange),
+      night: hour >= 22 || hour < 6,
+      remote: false,
+    }
+  }, [goods, pickupType, receiverAddress, scheduledSlot, senderAddress, vehicle])
+
+  useEffect(() => {
+    if (!vehicle || !input) {
+      setTotalCents(null)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    consumerRequest<PricingPreview>({ url: '/api/content/pricing/preview', method: 'POST', data: input })
+      .then(result => { if (!cancelled) setTotalCents(result.totalCents) })
+      .catch(() => {
+        if (!cancelled) setTotalCents(vehicle.pricingDescription.startFrom !== undefined ? Math.round(vehicle.pricingDescription.startFrom * 100) : null)
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [input, vehicle])
+
+  const amount = totalCents === null ? '—' : `¥${(totalCents / 100).toFixed(2)}`
+
   return (
-    <Card className="mb-3 bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100">
+    <Card className="mb-3 border-blue-100">
       <CardContent className="p-4">
-        <View className="flex items-center justify-between mb-3">
-          <View className="flex items-center gap-2">
-            <Receipt size={16} color="#2088D8" />
-            <Text className="block text-sm font-medium text-slate-700">费用说明</Text>
-          </View>
-          <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-            待核价
-          </Badge>
+        <View className="mb-3 flex items-center gap-2">
+          <Receipt size={16} color="#2088D8" />
+          <Text className="block text-sm font-medium text-slate-700">费用预估</Text>
         </View>
-
-        {vehicle?.pricingDescription?.breakdown && (
-          <View className="bg-white rounded-lg p-3 mb-3">
-            {vehicle.pricingDescription.breakdown.map((b, idx) => (
-              <View key={idx}>
-                <View className="flex items-center justify-between py-1">
-                  <Text className="block text-xs text-slate-600">{b.label}</Text>
-                  <Text className="block text-xs text-slate-700">
-                    {typeof b.amount === 'number' ? `¥${b.amount}` : b.amount}
-                  </Text>
-                </View>
-                {idx < vehicle.pricingDescription.breakdown!.length - 1 && <Separator />}
-              </View>
-            ))}
+        <View className="rounded-lg bg-blue-50 p-3">
+          <View className="flex items-center justify-between">
+            <Text className="block text-sm text-slate-700">本单预估</Text>
+            <Text className="block text-xl font-bold text-primary">{loading ? '计算中…' : amount}</Text>
           </View>
-        )}
-
-        <View className="flex items-center justify-between">
-          <Text className="block text-sm text-slate-600">本单预估</Text>
-          <Text className="block text-lg font-bold text-slate-400">—</Text>
-        </View>
-
-        <View className="mt-3 bg-white rounded-lg p-3 flex items-start gap-2">
-          <Info size={14} color="#94A3B8" className="mt-1 shrink-0" />
-          <Text className="block text-xs text-slate-500 leading-relaxed">
-            最终费用将在服务端核验路线、车型、货物和时间后计算;下单页不显示最终成交价。
-          </Text>
+          <Text className="mt-1 block text-xs leading-relaxed text-slate-500">根据当前路线、车型和货物预测，最终费用以后台审核报价为准。</Text>
         </View>
       </CardContent>
     </Card>

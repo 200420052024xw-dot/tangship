@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { UserAuthGuard } from '../auth/auth';
 import { createOrderSchema, parseDto } from '../validation/schemas';
@@ -25,6 +25,15 @@ export class OrdersController {
   async stats(@Req() req: any) {
     const data = await this.orders.stats(req.user.id);
     return { code: 200, msg: 'success', data };
+  }
+
+  @Delete() @HttpCode(200)
+  async remove(@Req() req: any, @Body() body: { ids?: unknown }) {
+    if (!Array.isArray(body?.ids) || body.ids.length === 0 || body.ids.length > 100 || body.ids.some(id => typeof id !== 'string' || !id)) {
+      throw new BadRequestException('请选择要删除的订单');
+    }
+    const data = await this.orders.softDelete(req.user.id, [...new Set(body.ids as string[])]);
+    return { code: 200, msg: '订单已删除', data };
   }
 
   @Get(':id')

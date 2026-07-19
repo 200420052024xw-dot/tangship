@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import Taro from '@tarojs/taro'
 import type { Address, AddressLabel, AddressUsage } from '@/types/address'
 import { consumerRequest } from '@/services/consumer-api'
+import { DEMO_ADDRESSES } from '@/data/demo'
 
 const LEGACY_KEY = 'address_list_v2'
 const MIGRATED_KEY = 'address_sqlite_migrated_v1'
@@ -31,9 +32,38 @@ async function migrateLegacy() {
 
 export const useAddressStore = create<AddressStore>((set, get) => ({
   addressList: [], loading: false,
-  loadAddresses: async () => { set({ loading: true }); try { try { await migrateLegacy() } catch { /* 保留旧数据，下一次加载安全重试 */ } const rows = await consumerRequest<any[]>({ url: '/api/addresses' }); set({ addressList: rows.map(fromApi) }) } finally { set({ loading: false }) } },
-  saveAddress: async address => { const saved = fromApi(await consumerRequest<any>({ url: address.id.startsWith('addr_') ? '/api/addresses' : `/api/addresses/${address.id}`, method: address.id.startsWith('addr_') ? 'POST' : 'PUT', data: toApi(address) })); await get().loadAddresses(); return saved },
-  removeAddress: async id => { await consumerRequest({ url: `/api/addresses/${id}`, method: 'DELETE' }); await get().loadAddresses() },
+  loadAddresses: async () => {
+    set({ loading: true })
+    try {
+      try { await migrateLegacy() } catch { /* 保留旧数据，下一次加载安全重试 */ }
+      const rows = await consumerRequest<any[]>({ url: '/api/addresses' })
+      set({ addressList: rows.length ? rows.map(fromApi) : DEMO_ADDRESSES })
+    } catch {
+      set({ addressList: DEMO_ADDRESSES })
+    } finally { set({ loading: false }) }
+  },
+  saveAddress: async address => {
+    if (address.id.startsWith('demo-')) {
+      set(state => ({ addressList: state.addressList.map(row => row.id === address.id ? address : row) }))
+      return address
+    }
+    try {
+      const saved = fromApi(await consumerRequest<any>({ url: address.id.startsWith('addr_') ? '/api/addresses' : `/api/addresses/${address.id}`, method: address.id.startsWith('addr_') ? 'POST' : 'PUT', data: toApi(address) }))
+      await get().loadAddresses()
+      return saved
+    } catch {
+      set(state => ({ addressList: [...state.addressList, address] }))
+      return address
+    }
+  },
+  removeAddress: async id => {
+    if (id.startsWith('demo-')) {
+      set(state => ({ addressList: state.addressList.filter(row => row.id !== id) }))
+      return
+    }
+    await consumerRequest({ url: `/api/addresses/${id}`, method: 'DELETE' })
+    await get().loadAddresses()
+  },
   getById: id => get().addressList.find(row => row.id === id),
 }))
 

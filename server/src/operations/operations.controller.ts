@@ -23,6 +23,7 @@ export class PublicContentController {
     return { code: 200, msg: 'success', data: await this.service.listBanners() };
   }
   @Get('contact') async contact() { return { code: 200, msg: 'success', data: await this.service.getContactSettings() }; }
+  @Post('pricing/preview') async pricingPreview(@Body() body: any) { return { code: 200, msg: 'success', data: await this.service.preview(body, false) }; }
   @Post('inquiries') async submitInquiry(@Body() body: any) { return { code: 200, msg: '提交成功', data: await this.service.submitInquiry(body) }; }
   @Get('inquiries/stats') async inquiryStats() { return { code: 200, msg: 'success', data: await this.service.getInquiryStats() }; }
 }
@@ -40,9 +41,9 @@ export class AdminOperationsController {
   @Post('upload') @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } })) async upload(@Req() req: any, @UploadedFile() file: any) { superOnly(req); return { code: 200, msg: '上传成功', data: await this.service.upload(req.admin.id, file, 'images') }; }
   @Get('pricing') async pricing() { return { code: 200, msg: 'success', data: await this.service.pricing() }; }
   @Put('pricing/draft') async draft(@Req() req: any, @Body() body: any) { superOnly(req); return { code: 200, msg: '草稿已保存', data: await this.service.saveDraft(req.admin.id, body.config, body.expectedVersion) }; }
-  @Post('pricing/preview') async preview(@Body() body: any) { return { code: 200, msg: 'success', data: this.service.preview(body.input, !!body.useDraft) }; }
+  @Post('pricing/preview') async preview(@Body() body: any) { return { code: 200, msg: 'success', data: await this.service.preview(body.input, !!body.useDraft) }; }
   @Post('pricing/publish') async publish(@Req() req: any, @Body() body: any) { superOnly(req); return { code: 200, msg: '已发布', data: await this.service.publish(req.admin.id, body.expectedVersion) }; }
-  @Post('orders/:id/suggested-quote') async suggest(@Body() body: any) { return { code: 200, msg: 'success', data: this.service.preview(body, false) }; }
+  @Post('orders/:id/suggested-quote') async suggest(@Body() body: any) { return { code: 200, msg: 'success', data: await this.service.preview(body, false) }; }
   // Inquiries management
   @Get('inquiries') async inquiries(@Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('type') type?: string, @Query('status') status?: string) {
     return { code: 200, msg: 'success', data: await this.service.listInquiries(Number(page) || 1, Number(pageSize) || 20, type, status) };

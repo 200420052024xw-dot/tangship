@@ -1,14 +1,23 @@
 import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Send, MapPin, Inbox, Download } from 'lucide-react-taro'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Inbox, Trash2 } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
+import { ORDER_INITIAL_TAB_KEY, ORDER_TAB_FILTERS as TAB_FILTERS, ORDER_TAB_LABELS as TAB_LABELS } from '@/constants/order-display'
+import { DEMO_ORDERS } from '@/data/demo'
+import { primeOrderDetail, removeOrderSnapshots } from '@/services/order-detail'
+import { FixedActionBar } from '@/components/layout/fixed-action-bar'
 
 type Address = {
   role: string; contactName: string; phone: string
@@ -35,31 +44,11 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   completed:       { label: '已完成',  color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CircleCheck },
 }
 
-/** Tab 分组：按用户视角而非系统状态 */
-const TAB_FILTERS: Record<string, string[]> = {
-  all:       [],
-  pending:   ['pending_review', 'pending_payment'],
-  active:    ['paid', 'dispatching', 'delivering'],
-  completed: ['completed'],
-  closed:    ['rejected', 'cancelled', 'quote_expired'],
-}
-
-const TAB_LABELS: Record<string, string> = {
-  all: '全部', pending: '待处理', active: '进行中', completed: '已完成', closed: '已取消',
-}
-
 function formatTime(iso: string) {
   const d = new Date(iso)
   const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin}分钟前`
-  const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return `${diffH}小时前`
-  const diffD = Math.floor(diffH / 24)
-  if (diffD < 7) return `${diffD}天前`
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const year = d.getFullYear() === now.getFullYear() ? '' : `${d.getFullYear()}年`
+  return `${year}${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function formatCents(cents: number) {
@@ -76,14 +65,24 @@ function getIconColor(colorClass: string): string {
 }
 
 export default function OrdersPage() {
-  const [activeTab, setActiveTab] = useState(() => {
-    const params = Taro.getCurrentInstance().router?.params
-    return params?.tab || 'all'
-  })
+  const [activeTab, setActiveTab] = useState('all')
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const didShowOnceRef = useRef(false)
   const { data: orders, loading, refresh } = useSWR<Order[]>(
-    'my-orders',
+    'my-orders-demo-v2',
     async () => {
-      const raw: any[] = await consumerRequest({ url: '/api/orders' })
+      let raw: any[]
+      try {
+        const result = await consumerRequest<any[]>({ url: '/api/orders' })
+        console.log('[Orders] list response:', result)
+        raw = Array.isArray(result) ? result : []
+      } catch {
+        raw = DEMO_ORDERS
+      }
       return raw.map((o: any) => ({
         ...o,
         orderNo: o.order_no,
@@ -110,7 +109,7 @@ export default function OrdersPage() {
           vehicleFeeCents: o.quote.vehicle_fee_cents,
           serviceFeeCents: o.quote.service_fee_cents,
           discountCents: o.quote.discount_cents,
-          totalFeeCents: o.quote.total_fee_cents,
+          totalFeeCents: o.quote.total_fee_cents ?? o.quote.total_cents,
           distanceMeters: o.quote.distance_meters,
           expiresAt: o.quote.expires_at,
         } : null,
@@ -118,9 +117,17 @@ export default function OrdersPage() {
     },
     'dynamic'
   )
-  useDidShow(() => { refresh() })
+  useDidShow(() => {
+    const initialTab = Taro.getStorageSync(ORDER_INITIAL_TAB_KEY)
+    if (typeof initialTab === 'string' && TAB_FILTERS[initialTab]) {
+      setActiveTab(initialTab)
+      Taro.removeStorageSync(ORDER_INITIAL_TAB_KEY)
+    }
+    if (didShowOnceRef.current) refresh()
+    else didShowOnceRef.current = true
+  })
 
-  const allOrders = orders || []
+  const allOrders = (orders || []).filter(order => !deletedIds.has(order.id))
 
   /** 按 Tab 分组筛选 */
   const filteredOrders = activeTab === 'all'
@@ -134,40 +141,42 @@ export default function OrdersPage() {
     return { count, totalCents }
   }, [filteredOrders])
 
-  /** 导出 CSV（跨端适配：H5 用 Blob 下载，小程序用文件系统写入） */
-  const handleExport = () => {
-    if (!filteredOrders.length) {
-      Taro.showToast({ title: '暂无订单可导出', icon: 'none' })
-      return
-    }
-    const header = '订单号,车型,状态,模式,总费用(元),下单时间'
-    const rows = filteredOrders.map(o => {
-      const sc = statusConfig[o.status] || { label: o.status }
-      const fee = o.quote?.totalFeeCents ? (o.quote.totalFeeCents / 100).toFixed(2) : ''
-      const time = new Date(o.createdAt).toLocaleString('zh-CN')
-      return `${o.orderNo},${o.vehicleName || o.vehicleId},${sc.label},${o.mode},${fee},${time}`
-    })
-    const csv = [header, ...rows].join('\n')
-    const isH5 = Taro.getEnv() === Taro.ENV_TYPE.WEB
+  const toggleSelecting = () => {
+    setSelecting(current => !current)
+    setSelectedIds(new Set())
+  }
 
-    if (isH5) {
-      // H5: Blob + <a> 触发下载
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'orders_export.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-      Taro.showToast({ title: '已导出', icon: 'success' })
-      console.log('[Orders] CSV exported (H5)')
-    } else {
-      // 小程序: 写入用户目录
-      const fs = Taro.getFileSystemManager()
-      const filePath = `${Taro.env.USER_DATA_PATH}/orders_export.csv`
-      fs.writeFileSync(filePath, '\uFEFF' + csv, 'utf8')
-      Taro.showToast({ title: '已导出到文件', icon: 'success' })
-      console.log('[Orders] CSV exported:', filePath)
+  const toggleSelected = (id: string) => {
+    setSelectedIds(current => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!selectedIds.size || deleting) return
+    const ids = [...selectedIds]
+    const realIds = ids.filter(id => !id.startsWith('demo-'))
+    setDeleting(true)
+    try {
+      if (realIds.length) {
+        await consumerRequest<{ deletedIds: string[] }>({
+          url: '/api/orders',
+          method: 'DELETE',
+          data: { ids: realIds },
+        })
+      }
+      setDeletedIds(current => new Set([...current, ...ids]))
+      removeOrderSnapshots(ids)
+      setSelectedIds(new Set())
+      setSelecting(false)
+      Taro.showToast({ title: `已删除${ids.length}个订单`, icon: 'success' })
+    } catch (error) {
+      Taro.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -187,13 +196,25 @@ export default function OrdersPage() {
         const receiver = order.addresses?.find(a => a.role === 'receiver')
         const itemSummary = order.items?.length ? `${order.items[0].name}等${order.items.reduce((s, i) => s + i.quantity, 0)}件` : ''
         return (
-          <Card key={order.id} onClick={() => Taro.navigateTo({ url: `/pages/order/detail/index?id=${order.id}` }).catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))}>
+          <Card
+            key={order.id}
+            className={selecting && selectedIds.has(order.id) ? 'border-primary bg-blue-50' : ''}
+            onClick={() => {
+              if (selecting) {
+                toggleSelected(order.id)
+              } else {
+                primeOrderDetail(order)
+                Taro.navigateTo({ url: `/pages/order/detail/index?id=${order.id}` })
+                  .catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))
+              }
+            }}
+          >
             <CardContent className="p-4">
               {/* 第一行：车型名 + 状态标签 */}
               <View className="flex flex-row items-center justify-between">
                 <View className="flex flex-row items-center gap-2">
-                  <Truck size={16} color="#475569" />
-                  <Text className="block text-sm font-semibold text-slate-800">{order.vehicleName || order.vehicleId}</Text>
+                  {selecting && <Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleSelected(order.id)} />}
+                  <Text className="block text-sm font-semibold text-slate-900">{order.vehicleName || order.vehicleId}</Text>
                 </View>
                 <View className="flex flex-row items-center gap-1">
                   <StatusIcon size={14} color={getIconColor(sc.color)} />
@@ -204,11 +225,11 @@ export default function OrdersPage() {
               {/* 第二行：地址信息 */}
               <View className="mt-3 space-y-1">
                 <View className="flex flex-row items-center gap-2">
-                  <Send size={14} color="#059669" />
+                  <View className="h-2 w-2 rounded-full bg-emerald-500" />
                   <Text className="block text-xs text-slate-600 truncate flex-1">{sender?.formattedAddress || '寄件地址'}</Text>
                 </View>
                 <View className="flex flex-row items-center gap-2">
-                  <MapPin size={14} color="#2563eb" />
+                  <View className="h-2 w-2 rounded-full bg-red-500" />
                   <Text className="block text-xs text-slate-600 truncate flex-1">{receiver?.formattedAddress || '收件地址'}</Text>
                 </View>
               </View>
@@ -231,13 +252,13 @@ export default function OrdersPage() {
   )
 
   return (
-    <View className="min-h-screen bg-slate-50">
+    <View className={`min-h-screen bg-background ${selecting ? 'pb-28' : ''}`}>
       {/* Tab 筛选栏 */}
-      <View className="bg-white px-2 pt-3 pb-0 border-b border-slate-100">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full">
+      <View className="border-b border-slate-100 bg-white px-2 pt-2">
+        <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setSelectedIds(new Set()) }} className="w-full">
+          <TabsList className="h-11 w-full rounded-none bg-white p-0">
             {Object.keys(TAB_FILTERS).map(tab => (
-              <TabsTrigger key={tab} value={tab} className="flex-1">
+              <TabsTrigger key={tab} value={tab} className="h-11 flex-1 rounded-none data-active:border-b-2">
                 <Text className="block">{TAB_LABELS[tab]}</Text>
               </TabsTrigger>
             ))}
@@ -245,7 +266,7 @@ export default function OrdersPage() {
         </Tabs>
       </View>
 
-      {/* 统计条 + 导出 */}
+      {/* 统计条 + 删除 */}
       {!loading && (
         <View className="flex flex-row items-center justify-between px-4 py-2 bg-white border-b border-slate-100">
           <View className="flex flex-row items-center gap-4">
@@ -254,10 +275,10 @@ export default function OrdersPage() {
               <Text className="block text-xs text-slate-500">合计 <Text className="text-sm font-semibold text-blue-600">{formatCents(stats.totalCents)}</Text></Text>
             )}
           </View>
-          <Button variant="ghost" size="sm" onClick={handleExport} className="px-2">
+          <Button variant={selecting ? 'secondary' : 'ghost'} size="sm" onClick={toggleSelecting} className="px-2">
             <View className="flex flex-row items-center gap-1">
-              <Download size={14} color="#475569" />
-              <Text className="block text-xs text-slate-600">导出</Text>
+              <Trash2 size={14} color={selecting ? '#1868B8' : '#475569'} />
+              <Text className="block text-xs text-slate-600">{selecting ? '取消' : '删除订单'}</Text>
             </View>
           </Button>
         </View>
@@ -276,6 +297,32 @@ export default function OrdersPage() {
           renderList()
         )}
       </View>
+
+      {selecting && (
+        <FixedActionBar bottom={0} safeArea={false}>
+          <View className="flex w-full flex-row items-center justify-between gap-4">
+            <Text className="block min-w-0 flex-1 text-sm text-slate-600">已选择 {selectedIds.size} 个订单</Text>
+            <Button className="shrink-0" variant="destructive" disabled={!selectedIds.size || deleting} onClick={() => setDeleteDialogOpen(true)}>
+              <Text className="block">{deleting ? '删除中…' : '确认删除'}</Text>
+            </Button>
+          </View>
+        </FixedActionBar>
+      )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle><Text className="block text-lg font-semibold">确认删除订单？</Text></AlertDialogTitle>
+            <AlertDialogDescription>
+              <Text className="block text-sm text-slate-500">将删除已选择的 {selectedIds.size} 个订单。删除后不会再显示在“我的订单”中。</Text>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel><Text className="block text-center">再想想</Text></AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}><Text className="block text-center">确认删除</Text></AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </View>
   )
 }

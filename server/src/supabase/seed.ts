@@ -6,11 +6,12 @@ export async function seedSupabase(supabase: SupabaseService) {
   const client = supabase.getClient();
   const now = new Date().toISOString();
 
-  // 1. Seed default admin users
-  const defaultAdmins = [
-    { username: 'admin', password: 'admin123', role: 'super_admin' },
-    { username: 'wjf', password: '123456', role: 'super_admin' },
-  ];
+  // 1. Seed the initial admin from server-side environment variables.
+  const adminUsername = process.env.INIT_ADMIN_USERNAME?.trim();
+  const adminPassword = process.env.INIT_ADMIN_PASSWORD;
+  const defaultAdmins = adminUsername && adminPassword
+    ? [{ username: adminUsername, password: adminPassword, role: 'super_admin' }]
+    : [];
   for (const a of defaultAdmins) {
     const { data: existing } = await client.from('admin_users').select('id').eq('username', a.username).maybeSingle();
     if (!existing) {
@@ -18,7 +19,7 @@ export async function seedSupabase(supabase: SupabaseService) {
         id: randomUUID(), username: a.username, password_hash: hashPassword(a.password),
         role: a.role, status: 'active', created_at: now, updated_at: now,
       });
-      console.log(`[Seed] Admin user created (${a.username}/${a.password})`);
+      console.log(`[Seed] Admin user created (${a.username})`);
     }
   }
 

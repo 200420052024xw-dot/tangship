@@ -171,7 +171,7 @@ const AlertDialogFooter = ({
 }: React.ComponentPropsWithoutRef<typeof View>) => (
   <View
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-row items-stretch justify-end gap-3",
       className
     )}
     {...props}
@@ -211,7 +211,7 @@ const AlertDialogAction = React.forwardRef<
     return (
         <View
           ref={ref}
-          className={cn(buttonVariants({ variant, size }), "w-full sm:w-auto", className)}
+          className={cn(buttonVariants({ variant, size }), "min-w-0 flex-1", className)}
           onClick={(e) => {
                 context?.onOpenChange?.(false)
                 onClick?.(e)
@@ -232,7 +232,7 @@ const AlertDialogCancel = React.forwardRef<
           ref={ref}
           className={cn(
             buttonVariants({ variant, size }),
-            "mt-2 sm:mt-0 w-full sm:w-auto",
+            "min-w-0 flex-1",
             className
             )}
           onClick={(e) => {

@@ -11,8 +11,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CircleCheck, CircleX, Hourglass, Wallet, Ban, Truck, Send, MapPin, Clock3, Receipt, CircleAlert, Phone } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
+import { PageHeader } from '@/components/layout/page-header'
+import { ContactPopup } from '@/components/inquiry/ContactPopup'
+import { getOrderSnapshot, primeOrderDetail, refreshOrderDetail, type OrderDetail } from '@/services/order-detail'
 
-type Detail = Record<string, any>
+type Detail = OrderDetail
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Clock3 }> = {
   pending_review:  { label: '待确认',  color: 'text-amber-600',  bg: 'bg-amber-50',   icon: Hourglass },
@@ -30,7 +33,9 @@ const modeLabels: Record<string, string> = { single: '单趟配送', monthly: '�
 
 function formatTime(iso: string) {
   const d = new Date(iso)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const now = new Date()
+  const year = d.getFullYear() === now.getFullYear() ? '' : `${d.getFullYear()}年`
+  return `${year}${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function yuan(cents: number) { return `¥${(cents / 100).toFixed(2)}` }
@@ -64,20 +69,31 @@ function getStepIndex(status: string) {
 }
 
 export default function OrderDetailPage() {
-  const [order, setOrder] = useState<Detail | null>(null)
-  const [orderId, setOrderId] = useState('')
+  const initialOrderId = Taro.getCurrentInstance().router?.params?.id || ''
+  const [order, setOrder] = useState<Detail | null>(() => getOrderSnapshot(initialOrderId))
+  const [orderId, setOrderId] = useState(initialOrderId)
   const [paying, setPaying] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [contactDialogOpen, setContactDialogOpen] = useState(false)
 
   useLoad(({ id }) => {
     setOrderId(id)
-    consumerRequest<Detail>({ url: `/api/orders/${id}` })
+    const snapshot = getOrderSnapshot(id)
+    if (snapshot) setOrder(snapshot)
+    refreshOrderDetail(id)
       .then(setOrder)
-      .catch(() => Taro.showToast({ title: '加载失败', icon: 'none' }))
+      .catch(() => { if (!snapshot) Taro.showToast({ title: '加载失败', icon: 'none' }) })
   })
 
   const handlePay = async () => {
     if (!order?.quote || paying) return
+    if (orderId.startsWith('demo-')) {
+      const updatedOrder = { ...order, status: 'paid' }
+      setOrder(updatedOrder)
+      primeOrderDetail(updatedOrder)
+      Taro.showToast({ title: '演示支付成功', icon: 'success' })
+      return
+    }
     setPaying(true)
     try {
       const result = await consumerRequest<Detail>({
@@ -85,6 +101,7 @@ export default function OrderDetailPage() {
         data: { amountCents: order.quote.total_cents }
       })
       setOrder(result)
+      primeOrderDetail(result)
       Taro.showToast({ title: '支付成功', icon: 'success' })
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '支付失败', icon: 'none' })
@@ -92,9 +109,18 @@ export default function OrderDetailPage() {
   }
 
   const handleCancel = async () => {
+    if (orderId.startsWith('demo-')) {
+      const updatedOrder = { ...order, status: 'cancelled' }
+      setOrder(updatedOrder)
+      primeOrderDetail(updatedOrder)
+      setCancelDialogOpen(false)
+      Taro.showToast({ title: '演示订单已取消', icon: 'success' })
+      return
+    }
     try {
       const result = await consumerRequest<Detail>({ url: `/api/orders/${orderId}/cancel`, method: 'POST' })
       setOrder(result)
+      primeOrderDetail(result)
       Taro.showToast({ title: '已取消', icon: 'success' })
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '取消失败', icon: 'none' })
@@ -102,7 +128,7 @@ export default function OrderDetailPage() {
   }
 
   if (!order) return (
-    <View className="min-h-screen bg-slate-50 p-4 space-y-3">
+    <View className="min-h-screen bg-background p-4 space-y-3">
       <Skeleton className="h-20 rounded-xl" />
       <Skeleton className="h-32 rounded-xl" />
       <Skeleton className="h-40 rounded-xl" />
@@ -118,11 +144,13 @@ export default function OrderDetailPage() {
   const isTerminal = stepIdx === -1 || order.status === 'completed'
   const canCancel = ['pending_review', 'pending_payment'].includes(order.status)
   const isPaid = order.status === 'paid'
+  const isDelivering = order.status === 'delivering'
 
   return (
-    <View className="min-h-screen bg-slate-50 pb-6">
+    <View className="min-h-screen bg-background pb-8">
+      <PageHeader title="订单详情" />
       {/* 顶部状态栏 */}
-      <View className={`${sc.bg} px-4 pt-5 pb-4`}>
+      <View className={`${sc.bg} mx-4 mt-3 rounded-xl px-4 py-5`}>
         <View className="flex flex-row items-center gap-2">
           <StatusIcon size={24} color={getIconColor(sc.color)} />
           <View>
@@ -132,7 +160,7 @@ export default function OrderDetailPage() {
         </View>
       </View>
 
-      <View className="px-4 -mt-2 space-y-3">
+      <View className="space-y-3 px-4 pt-3">
         {/* 状态步骤条 - 加大字号和图标 */}
         {!isTerminal && (
           <Card>
@@ -144,8 +172,8 @@ export default function OrderDetailPage() {
                   const active = Math.floor(stepIdx) === i
                   return (
                     <View key={step.key} className="flex flex-col items-center flex-1">
-                      <View className={`w-9 h-9 rounded-full flex items-center justify-center ${done ? 'bg-blue-500' : active ? 'bg-blue-100' : 'bg-slate-100'}`}>
-                        <StepIcon size={18} color={done ? '#ffffff' : active ? '#2563eb' : '#94a3b8'} />
+                      <View className={`flex h-8 w-8 items-center justify-center rounded-full ${done ? 'bg-primary' : active ? 'bg-blue-100' : 'bg-slate-100'}`}>
+                        <StepIcon size={16} color={done ? '#ffffff' : active ? '#2088D8' : '#94a3b8'} />
                       </View>
                       <Text className={`block text-xs mt-1 font-medium ${done ? 'text-blue-600' : 'text-slate-400'}`}>{step.label}</Text>
                     </View>
@@ -281,9 +309,9 @@ export default function OrderDetailPage() {
           </Button>
         )}
 
-        {/* 已支付订单 - 联系客服 */}
-        {isPaid && (
-          <Button variant="outline" className="w-full" onClick={() => Taro.makePhoneCall({ phoneNumber: '400-000-0000' }).catch(() => Taro.showToast({ title: '客服电话：400-000-0000', icon: 'none', duration: 3000 }))}>
+        {/* 配送中订单 - 联系客服 */}
+        {isDelivering && (
+          <Button variant="outline" className="w-full" onClick={() => setContactDialogOpen(true)}>
             <View className="flex flex-row items-center gap-2">
               <Phone size={16} color="#475569" />
               <Text className="block">联系客服</Text>
@@ -305,14 +333,22 @@ export default function OrderDetailPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>
-              <Text className="block">再想想</Text>
+              <Text className="block text-center">再想想</Text>
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleCancel}>
-              <Text className="block">确认取消</Text>
+              <Text className="block text-center">确认取消</Text>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ContactPopup
+        open={contactDialogOpen}
+        onClose={() => setContactDialogOpen(false)}
+        title="联系客服"
+        description="配送过程中如有问题，请通过以下方式联系我们"
+        showSuccessIcon={false}
+      />
     </View>
   )
 }

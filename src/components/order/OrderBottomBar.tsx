@@ -6,9 +6,10 @@
  * - 留出 children 插槽以便"费用预估"叠加在按钮上方(如核对页)
  */
 
-import { View, Text } from '@tarojs/components'
+import { Text } from '@tarojs/components'
 import type { FC, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { FixedActionBar } from '@/components/layout/fixed-action-bar'
 
 interface Props {
   /** 按钮文案 */
@@ -31,29 +32,17 @@ export const OrderBottomBar: FC<Props> = ({
   children,
 }) => {
   return (
-    <View
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: '12px 16px',
-        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
-        backgroundColor: '#fff',
-        borderTop: '1px solid #e5e5e5',
-        zIndex: 100,
-      }}
-    >
+    <FixedActionBar>
       {children}
       <Button
-        className={`w-full h-12 font-medium rounded-lg text-white ${
-          ready ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-300'
+        className={`w-full h-12 text-white ${
+          ready ? 'bg-primary' : 'bg-slate-300'
         }`}
         disabled={!ready}
         onClick={onClick}
       >
         <Text className="block text-base">{ready ? label : disabledLabel}</Text>
       </Button>
-    </View>
+    </FixedActionBar>
   )
 }

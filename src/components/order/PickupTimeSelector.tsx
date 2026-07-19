@@ -10,8 +10,8 @@ import { useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/drawer'
-import { Button } from '@/components/ui/button'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Clock, Zap, Calendar, ChevronDown } from 'lucide-react-taro'
 import type { PickupType, TimeSlot } from '@/types/order'
 
@@ -128,17 +128,6 @@ export const PickupTimeSelector: FC<Props> = ({
     }
   }
 
-  const handleDrawerConfirm = () => {
-    if (tempDate && tempSlot) {
-      onScheduledSlotChange({
-        date: tempDate,
-        startTime: tempSlot.start,
-        endTime: tempSlot.end,
-      })
-    }
-    setDrawerOpen(false)
-  }
-
   const handleReschedule = () => {
     setTempDate(scheduledSlot?.date || bookableDates[0]?.value || '')
     setTempSlot(
@@ -151,8 +140,13 @@ export const PickupTimeSelector: FC<Props> = ({
 
   const handleDateSelect = (dateValue: string) => {
     setTempDate(dateValue)
-    const firstSlot = getHalfHourSlots(dateValue)[0]
-    setTempSlot(firstSlot || null)
+    setTempSlot(null)
+  }
+
+  const handleSlotSelect = (slot: { start: string; end: string }) => {
+    setTempSlot(slot)
+    onScheduledSlotChange({ date: tempDate, startTime: slot.start, endTime: slot.end })
+    setDrawerOpen(false)
   }
 
   // Drawer 内时段列表基于临时日期
@@ -238,7 +232,8 @@ export const PickupTimeSelector: FC<Props> = ({
             <DrawerTitle>选择预约时间</DrawerTitle>
           </DrawerHeader>
 
-          <View className="px-4 pb-4 space-y-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <ScrollArea className="h-80 px-4">
+          <View className="space-y-4 pb-6">
             {/* 日期选择 */}
             <View>
               <Text className="block text-sm font-medium text-slate-700 mb-2">选择日期</Text>
@@ -276,7 +271,7 @@ export const PickupTimeSelector: FC<Props> = ({
                       <View
                         key={key}
                         className={`rounded-lg py-2 px-1 text-center ${isSelected ? 'bg-blue-500' : 'bg-slate-50 active:bg-blue-50'}`}
-                        onClick={() => setTempSlot(slot)}
+                        onClick={() => handleSlotSelect(slot)}
                       >
                         <Text className={`block text-xs ${isSelected ? 'text-white font-medium' : 'text-slate-700'}`}>
                           {slot.label}
@@ -288,16 +283,7 @@ export const PickupTimeSelector: FC<Props> = ({
               )}
             </View>
           </View>
-
-          <DrawerFooter>
-            <Button
-              className="w-full"
-              disabled={!tempDate || !tempSlot}
-              onClick={handleDrawerConfirm}
-            >
-              <Text className="text-white">确认预约</Text>
-            </Button>
-          </DrawerFooter>
+          </ScrollArea>
         </DrawerContent>
       </Drawer>
     </>

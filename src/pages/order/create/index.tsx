@@ -19,7 +19,7 @@ import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowLeft, CircleAlert } from 'lucide-react-taro'
+import { CircleAlert } from 'lucide-react-taro'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { fetchVehicle } from '@/services/vehicle-catalog'
 import type { Vehicle } from '@/types/vehicle'
@@ -40,6 +40,7 @@ import {
   isValidPositiveNumber,
   isNonEmptyString,
 } from '@/utils/validators'
+import { PageHeader } from '@/components/layout/page-header'
 
 const SECTION_IDS = {
   vehicle: 'section-vehicle',
@@ -233,16 +234,9 @@ const OrderCreatePage: FC = () => {
   }, [vehicle, draft.goods])
 
   return (
-    <View className="min-h-screen bg-slate-50 pb-32">
+    <View className="min-h-screen bg-background pb-32">
       {/* 顶部标题 */}
-      <View className="sticky top-0 z-10 bg-white border-b border-slate-100">
-        <View className="flex items-center px-4 h-12">
-          <View className="flex items-center gap-2" onClick={() => Taro.navigateBack()}>
-            <ArrowLeft size={18} color="#1E293B" />
-            <Text className="block text-base font-medium text-slate-800">下单</Text>
-          </View>
-        </View>
-      </View>
+      <PageHeader title="下单" />
 
       {/* 主体 */}
       <View className="p-4 space-y-3">
@@ -273,7 +267,7 @@ const OrderCreatePage: FC = () => {
         </View>
 
         {/* 寄件 / 收件 — 统一卡片 */}
-        <View className="bg-white rounded-xl border border-slate-200">
+        <Card>
           <View id={SECTION_IDS.sender}>
             <AddressCard
               role="sender"
@@ -302,7 +296,7 @@ const OrderCreatePage: FC = () => {
               highlight={activeSection === SECTION_IDS.receiver && !!errors.receiverAddress}
             />
           </View>
-        </View>
+        </Card>
         {errors.senderAddress && (
           <Text className="block text-xs text-red-500 mt-1">{errors.senderAddress}</Text>
         )}
@@ -345,7 +339,14 @@ const OrderCreatePage: FC = () => {
         </View>
 
         {/* 费用 */}
-        <FeePreview vehicle={vehicle} />
+        <FeePreview
+          vehicle={vehicle}
+          senderAddress={draft.senderAddress}
+          receiverAddress={draft.receiverAddress}
+          goods={draft.goods}
+          pickupType={draft.pickupType}
+          scheduledSlot={draft.scheduledSlot}
+        />
 
         {/* 协议 */}
         <View id={SECTION_IDS.agreement}>

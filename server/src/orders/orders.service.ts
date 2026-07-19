@@ -92,17 +92,28 @@ export class OrdersService {
 
   async stats(userId: string) {
     const client = this.getClient();
-    const [pendingPayment, active, completed, inquiries] = await Promise.all([
+    const [pendingReview, pendingPayment, active, completed] = await Promise.all([
+      client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'pending_review'),
       client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'pending_payment'),
       client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).in('status', ['paid', 'dispatching', 'delivering']),
       client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'completed'),
-      client.from('inquiries').select('id', { count: 'exact', head: true }).eq('contact_name', userId).eq('status', 'pending'),
     ]);
-    const { data: totalRow } = await client.from('orders').select('total_fee').eq('user_id', userId).eq('status', 'completed');
-    const totalSpent = (totalRow || []).reduce((sum, r) => sum + (Number(r.total_fee) || 0), 0);
+    const { data: userOrders, error: orderError } = await client.from('orders').select('id').eq('user_id', userId);
+    if (orderError) throw new Error(`查询消费订单失败: ${orderError.message}`);
+    const orderIds = (userOrders || []).map(order => order.id);
+    let totalSpent = 0;
+    if (orderIds.length) {
+      const { data: paymentRows, error: paymentError } = await client
+        .from('payments')
+        .select('amount_cents')
+        .in('order_id', orderIds)
+        .eq('status', 'success');
+      if (paymentError) throw new Error(`查询消费金额失败: ${paymentError.message}`);
+      totalSpent = (paymentRows || []).reduce((sum, payment) => sum + (Number(payment.amount_cents) || 0), 0);
+    }
     return {
       pendingPayment: pendingPayment.count || 0,
-      pendingReview: inquiries.count || 0,
+      pendingReview: pendingReview.count || 0,
       active: active.count || 0,
       completed: completed.count || 0,
       totalSpent,
@@ -117,7 +128,7 @@ export class OrdersService {
     const client = this.getClient();
     // 1. 查订单主表（含 mode/物品摘要字段）
     const { data: orders, error } = await client.from('orders')
-      .select('id, order_no, vehicle_id, mode, status, pickup_type, scheduled_at, scheduled_end_at, created_at, updated_at')
+      .select('id, order_no, vehicle_id, mode, status, pickup_type, scheduled_at, scheduled_end_at, customer_remark, rejection_reason, user_note, created_at, updated_at')
       .eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw new Error(`查询订单失败: ${error.message}`);
 
@@ -127,12 +138,22 @@ export class OrdersService {
     }
 
     // 2. 批量查关联数据（地址 + 物品 + 最新报价 + 车型名称）
-    const orderIds = orders.map(o => o.id);
-    const vehicleIds = [...new Set(orders.map(o => o.vehicle_id))];
+    const allOrderIds = orders.map(o => o.id);
+    const { data: deletedRows, error: deletedError } = await client.from('order_status_logs')
+      .select('order_id').in('order_id', allOrderIds).eq('operator_type', 'user_delete');
+    if (deletedError) throw new Error(`查询已删除订单失败: ${deletedError.message}`);
+    const deletedIds = new Set((deletedRows || []).map(row => row.order_id));
+    const visibleOrders = orders.filter(order => !deletedIds.has(order.id));
+    if (visibleOrders.length === 0) {
+      serverCache.set(cacheKey, [], CACHE_TTL.DYNAMIC);
+      return [];
+    }
+    const orderIds = visibleOrders.map(o => o.id);
+    const vehicleIds = [...new Set(visibleOrders.map(o => o.vehicle_id))];
     const [addrRes, itemRes, quoteRes, vehicleRes] = await Promise.all([
       client.from('order_addresses').select('order_id, role, contact_name, phone, formatted_address, detail_address').in('order_id', orderIds),
       client.from('order_items').select('order_id, category, name, quantity, estimated_weight_kg').in('order_id', orderIds),
-      client.from('order_quotes').select('order_id, total_fee_cents').in('order_id', orderIds).order('created_at', { ascending: false }),
+      client.from('order_quotes').select('order_id, base_fee_cents, distance_fee_cents, vehicle_fee_cents, service_fee_cents, discount_cents, total_cents, distance_meters, expires_at').in('order_id', orderIds).order('created_at', { ascending: false }),
       client.from('vehicle_catalog').select('id, name').in('id', vehicleIds),
     ]);
 
@@ -156,7 +177,7 @@ export class OrdersService {
       vehicleNameMap.set(v.id, v.name);
     }
 
-    const result = orders.map(o => ({
+    const result = visibleOrders.map(o => ({
       ...o,
       vehicle_name: vehicleNameMap.get(o.vehicle_id) || o.vehicle_id,
       addresses: addrMap.get(o.id) || [],
@@ -169,9 +190,33 @@ export class OrdersService {
   }
 
   async detail(userId: string, id: string) {
-    const { data: order, error } = await this.getClient().from('orders').select('*').eq('id', id).eq('user_id', userId).maybeSingle();
+    const client = this.getClient();
+    const { data: order, error } = await client.from('orders').select('*').eq('id', id).eq('user_id', userId).maybeSingle();
     if (error || !order) throw new NotFoundException('订单不存在');
+    const { data: deleted } = await client.from('order_status_logs').select('id').eq('order_id', id).eq('operator_type', 'user_delete').limit(1).maybeSingle();
+    if (deleted) throw new NotFoundException('订单不存在');
     return this.expand(order, false);
+  }
+
+  async softDelete(userId: string, ids: string[]) {
+    const client = this.getClient();
+    const time = now();
+    const { data: ownedOrders, error: orderError } = await client.from('orders').select('id, status').eq('user_id', userId).in('id', ids);
+    if (orderError) throw new Error(`查询订单失败: ${orderError.message}`);
+    const ownedIds = (ownedOrders || []).map(order => order.id);
+    if (ownedIds.length === 0) return { deletedIds: [] };
+    const { data: existingRows } = await client.from('order_status_logs').select('order_id').in('order_id', ownedIds).eq('operator_type', 'user_delete');
+    const existingIds = new Set((existingRows || []).map(row => row.order_id));
+    const rows = (ownedOrders || []).filter(order => !existingIds.has(order.id)).map(order => ({
+      id: randomUUID(), order_id: order.id, from_status: order.status, to_status: order.status,
+      operator_type: 'user_delete', operator_id: userId, remark: '用户从我的订单中删除', created_at: time,
+    }));
+    if (rows.length) {
+      const { error } = await client.from('order_status_logs').insert(rows);
+      if (error) throw new Error(`删除订单失败: ${error.message}`);
+    }
+    serverCache.invalidate(CACHE_KEYS.ORDERS_PREFIX + userId);
+    return { deletedIds: ownedIds };
   }
 
   async adminList(status?: string) {
@@ -272,7 +317,7 @@ export class OrdersService {
     if (payErr) throw new ConflictException('订单状态已变化，请刷新后重试');
     const { error: insertErr } = await client.from('payments').insert({
       id: paymentId, order_id: id, amount_cents: amountCents,
-      provider: 'mock', status: 'success', provider_tx_id: null, created_at: time, updated_at: time,
+      provider: 'mock', status: 'success', provider_trade_no: null, created_at: time, updated_at: time,
     });
     if (insertErr) throw new Error(`创建支付记录失败: ${insertErr.message}`);
     await this.log(id, 'pending_payment', 'paid', 'user', userId, '模拟支付成功');

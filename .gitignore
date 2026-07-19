@@ -48,6 +48,9 @@ key/
 # Preview files
 .preview
 
+# Local media sources (production assets must use TOS)
+picture/
+
 .cozeproj/reduction
 
 # CodeGraph index

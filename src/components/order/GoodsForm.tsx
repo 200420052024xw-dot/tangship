@@ -12,7 +12,7 @@ import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Package, CircleAlert } from 'lucide-react-taro'
@@ -45,6 +45,7 @@ function emptyGoods(): GoodsInfo {
 
 export const GoodsForm: FC<Props> = ({ value, onChange, overloadHint }) => {
   const [goods, setGoods] = useState<GoodsInfo>(value || emptyGoods())
+  const [touched, setTouched] = useState({ name: false, weight: false })
 
   useEffect(() => {
     if (value) setGoods(value)
@@ -73,24 +74,21 @@ export const GoodsForm: FC<Props> = ({ value, onChange, overloadHint }) => {
           <Text className="block text-sm font-medium text-slate-700 mb-2">
             物品类型 <Text className="text-red-500">*</Text>
           </Text>
-          <ToggleGroup
-            type="single"
+          <Select
             value={goods.category}
-            onValueChange={(v) => {
-              if (v && typeof v === 'string') update({ category: v as GoodsCategory })
-            }}
-            className="flex-wrap gap-2"
+            onValueChange={category => update({ category: category as GoodsCategory })}
           >
-            {GOODS_CATEGORY_OPTIONS.map(opt => (
-              <ToggleGroupItem
-                key={opt.value}
-                value={opt.value}
-                className="rounded-full px-3 py-1 text-sm"
-              >
-                <Text className="block">{opt.label}</Text>
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            <SelectTrigger className="h-11 w-full border-slate-200 bg-slate-50 px-3">
+              <SelectValue><Text className="block text-sm text-slate-800">{GOODS_CATEGORY_OPTIONS.find(option => option.value === goods.category)?.label}</Text></SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start" className="min-w-48">
+              <SelectGroup>
+                {GOODS_CATEGORY_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value} className="py-2"><Text className="block text-sm">{option.label}</Text></SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </View>
 
         {/* 物品名称 */}
@@ -103,11 +101,11 @@ export const GoodsForm: FC<Props> = ({ value, onChange, overloadHint }) => {
               className={`w-full bg-transparent border-0 focus-within:ring-0 focus-within:border-0 ${nameError ? 'ring-1 ring-red-300' : ''}`}
               placeholder={goods.category === 'other' ? '请说明是什么物品' : '如:文件 5 份 / 苹果一箱'}
               value={goods.name}
-              onInput={(e) => update({ name: e.detail.value })}
+              onInput={(e) => { setTouched(state => ({ ...state, name: true })); update({ name: e.detail.value }) }}
               maxlength={50}
             />
           </View>
-          {nameError && (
+          {touched.name && nameError && (
             <Text className="block text-xs text-red-500 mt-1">请填写物品名称</Text>
           )}
           {goods.category === 'other' && !goods.name.trim() && (
@@ -147,11 +145,11 @@ export const GoodsForm: FC<Props> = ({ value, onChange, overloadHint }) => {
                 type="number"
                 placeholder="0"
                 value={goods.estimatedWeightKg ? String(goods.estimatedWeightKg) : ''}
-                onInput={(e) => update({ estimatedWeightKg: parseNumber(e.detail.value) || 0 })}
+                onInput={(e) => { setTouched(state => ({ ...state, weight: true })); update({ estimatedWeightKg: parseNumber(e.detail.value) || 0 }) }}
               />
               <Text className="block text-xs text-slate-400 ml-1">kg</Text>
             </View>
-            {weightError && (
+            {touched.weight && weightError && (
               <Text className="block text-xs text-red-500 mt-1">请填写有效重量</Text>
             )}
           </View>
@@ -159,39 +157,37 @@ export const GoodsForm: FC<Props> = ({ value, onChange, overloadHint }) => {
 
         {/* 长宽高(选填) */}
         <View>
-          <Text className="block text-sm font-medium text-slate-700 mb-2">
-            尺寸(选填)
-          </Text>
+          <View className="mb-2 flex items-center justify-between">
+            <Text className="block text-sm font-medium text-slate-700">尺寸(选填)</Text>
+            <Text className="block text-xs text-slate-400">单位：mm</Text>
+          </View>
           <View className="grid grid-cols-3 gap-2">
-            <View className="bg-slate-50 rounded-lg px-3 py-1">
+            <View className="rounded-lg bg-slate-50 px-3">
               <Input
-                className="w-full bg-transparent border-0 text-sm"
+                className="h-10 w-full border-0 bg-transparent text-sm"
                 type="number"
-                placeholder="长"
+                placeholder="长(mm)"
                 value={goods.lengthMm ? String(goods.lengthMm) : ''}
                 onInput={(e) => update({ lengthMm: parseNumber(e.detail.value) || undefined })}
               />
-              <Text className="block text-xs text-slate-400 text-right">mm</Text>
             </View>
-            <View className="bg-slate-50 rounded-lg px-3 py-1">
+            <View className="rounded-lg bg-slate-50 px-3">
               <Input
-                className="w-full bg-transparent border-0 text-sm"
+                className="h-10 w-full border-0 bg-transparent text-sm"
                 type="number"
-                placeholder="宽"
+                placeholder="宽(mm)"
                 value={goods.widthMm ? String(goods.widthMm) : ''}
                 onInput={(e) => update({ widthMm: parseNumber(e.detail.value) || undefined })}
               />
-              <Text className="block text-xs text-slate-400 text-right">mm</Text>
             </View>
-            <View className="bg-slate-50 rounded-lg px-3 py-1">
+            <View className="rounded-lg bg-slate-50 px-3">
               <Input
-                className="w-full bg-transparent border-0 text-sm"
+                className="h-10 w-full border-0 bg-transparent text-sm"
                 type="number"
-                placeholder="高"
+                placeholder="高(mm)"
                 value={goods.heightMm ? String(goods.heightMm) : ''}
                 onInput={(e) => update({ heightMm: parseNumber(e.detail.value) || undefined })}
               />
-              <Text className="block text-xs text-slate-400 text-right">mm</Text>
             </View>
           </View>
         </View>

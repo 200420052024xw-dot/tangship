@@ -13,7 +13,7 @@
  */
 
 import { Image, View, Text, Swiper, SwiperItem } from '@tarojs/components'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import {
@@ -28,36 +28,56 @@ import type { Vehicle } from '@/types/vehicle'
 import { useSWR } from '@/stores/data-cache'
 import { consumerRequest } from '@/services/consumer-api'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DEMO_BANNERS, getDemoVehicles } from '@/data/demo'
+import { primeVehicleCache } from '@/services/vehicle-catalog'
 import './index.css'
 
 const IndexPage: FC = () => {
   const [activeTab, setActiveTab] = useState<ServiceMode>('single')
   const [currentBanner, setCurrentBanner] = useState(0)
+  const [openingVehicleId, setOpeningVehicleId] = useState<string | null>(null)
+  const navigatingRef = useRef(false)
   const { data: catalog, loading: loadingCatalog } = useSWR<Vehicle[]>(
-    `vehicles-${activeTab}`, () => consumerRequest({ url: `/api/content/vehicles?mode=${activeTab}` }), 'static'
+    `vehicles-demo-v2-${activeTab}`, async () => {
+      try {
+        const result = await consumerRequest<Vehicle[]>({ url: `/api/content/vehicles?mode=${activeTab}` })
+        return result?.length ? result : getDemoVehicles(activeTab)
+      } catch {
+        return getDemoVehicles(activeTab)
+      }
+    }, 'static'
   )
   const { data: banners } = useSWR<BannerItem[]>(
-    'banners', () => consumerRequest({ url: '/api/content/banners' }), 'static'
+    'banners-demo-v2', async () => {
+      try {
+        const result = await consumerRequest<BannerItem[]>({ url: '/api/content/banners' })
+        return result?.length ? result : DEMO_BANNERS
+      } catch {
+        return DEMO_BANNERS
+      }
+    }, 'static'
   )
 
-  const vehicles = catalog || []
-
-  /** 轮播图背景颜色 */
-  const getBannerColor = (bannerId: string): string => {
-    const colors: Record<string, string> = {
-      'banner-1': '#2088D8',
-      'banner-2': '#28a745',
-      'banner-3': '#17a2b8',
-      'banner-4': '#6f42c1',
-    }
-    return colors[bannerId] || '#2088D8'
-  }
+  const vehicles = catalog?.length ? catalog : getDemoVehicles(activeTab)
+  const visibleBanners = banners?.length ? banners : DEMO_BANNERS
 
   /** 点击车型卡片 → 统一进入车型详情页 */
-  const handleVehicleClick = (vehicle: Vehicle) => {
-    Taro.navigateTo({
-      url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=${activeTab}`,
-    }).catch(() => Taro.showToast({ title: '车型详情打开失败', icon: 'none' }))
+  const handleVehicleClick = async (vehicle: Vehicle) => {
+    if (navigatingRef.current) return
+
+    navigatingRef.current = true
+    setOpeningVehicleId(vehicle.id)
+    primeVehicleCache(vehicle)
+    try {
+      await Taro.navigateTo({
+        url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=${activeTab}`,
+      })
+    } catch {
+      Taro.showToast({ title: '车型详情打开失败', icon: 'none' })
+    } finally {
+      navigatingRef.current = false
+      setOpeningVehicleId(null)
+    }
   }
 
   /** 轮播图点击 */
@@ -86,53 +106,61 @@ const IndexPage: FC = () => {
   }
 
   return (
-    <View className="min-h-screen bg-slate-50">
+    <View className="min-h-screen bg-background pb-6">
       {/* 轮播图 */}
-      {(banners || []).length > 0 && (
-        <View className="w-full relative overflow-hidden">
+      {visibleBanners.length > 0 && (
+        <View className="px-4 pt-3">
+          <View className="relative w-full overflow-hidden rounded-xl bg-slate-100">
           <Swiper
-            className="w-full h-48"
-            indicatorDots={(banners || []).length > 1}
-            autoplay={(banners || []).length > 1}
+            className="h-44 w-full"
+            indicatorDots={false}
+            autoplay={visibleBanners.length > 1}
             interval={3000}
             duration={500}
-            circular={(banners || []).length > 1}
+            circular={visibleBanners.length > 1}
             current={currentBanner}
             onChange={(e) => setCurrentBanner(e.detail.current)}
           >
-            {(banners || []).map(banner => (
+            {visibleBanners.map(banner => (
               <SwiperItem key={banner.id} onClick={() => handleBannerClick(banner)}>
-                <View
-                  className="w-full h-48 relative flex items-center justify-center"
-                  style={{ backgroundColor: getBannerColor(banner.id) }}
-                >
-                  {banner.image && <Image className="absolute inset-0 w-full h-full" mode="aspectFill" src={banner.image} />}
-                  <Text className="block relative z-10 text-white text-xl font-bold text-center">
-                    {banner.title}
-                  </Text>
+                <View className="relative flex h-44 w-full items-center bg-blue-50">
+                  {banner.image && <Image className="absolute inset-0 h-full w-full" mode="aspectFill" src={banner.image} />}
+                  <View className="relative z-10 max-w-xs px-5">
+                    <Text className="block whitespace-pre-line text-xl font-bold leading-relaxed text-slate-900">{banner.title}</Text>
+                    {!banner.image && <Text className="mt-2 block text-xs text-primary">安全可靠 · 准时送达</Text>}
+                  </View>
+                  {!banner.image && <View className="absolute -bottom-8 -right-8 h-36 w-36 rounded-full bg-blue-100" />}
                 </View>
               </SwiperItem>
             ))}
           </Swiper>
+          {visibleBanners.length > 1 && (
+            <View className="absolute bottom-3 left-0 right-0 flex justify-center gap-1">
+              {visibleBanners.map((banner, index) => (
+                <View key={banner.id} className={`h-1 rounded-full ${index === currentBanner ? 'w-5 bg-primary' : 'w-2 bg-white'}`} />
+              ))}
+            </View>
+          )}
+          </View>
         </View>
       )}
 
-      {/* 服务模式切换 — 吸顶无间距 */}
-      <View style={{ position: 'sticky', top: 0, zIndex: 50 }} className="bg-white">
+      {/* 服务模式切换 */}
+      <View className="px-4 pt-3">
         <ServiceModeSwitcher value={activeTab} onChange={setActiveTab} />
       </View>
 
       {/* 车型列表 */}
-      <View className="p-4 pb-16">
-        <View className="mb-4">
-          <Text className="block text-lg font-semibold text-slate-800">
+      <View className="px-4 pb-16 pt-5">
+        <View className="mb-3">
+          <Text className="block text-base font-semibold text-slate-900">
             {activeTab === 'single'
               ? '选择无人配送车型'
               : activeTab === 'monthly'
                 ? '包月专线车型'
                 : '无人车辆租购服务'}
           </Text>
-          <Text className="block text-sm text-slate-400 mt-1">
+          <Text className="mt-1 block text-xs leading-relaxed text-slate-500">
             {activeTab === 'single'
               ? '九识智能全系车型,精准匹配您的配送需求'
               : activeTab === 'monthly'
@@ -141,13 +169,14 @@ const IndexPage: FC = () => {
           </Text>
         </View>
 
-        {loadingCatalog ? <View className="grid grid-cols-2 gap-3"><Skeleton className="h-48" /><Skeleton className="h-48" /></View> : vehicles.length === 0 ? <Text className="block py-10 text-center text-sm text-slate-500">暂无可用车型</Text> : <View className="grid grid-cols-2 gap-3">
+        {loadingCatalog ? <View className="space-y-3"><Skeleton className="h-36 rounded-xl" /><Skeleton className="h-36 rounded-xl" /></View> : vehicles.length === 0 ? <Text className="block py-10 text-center text-sm text-slate-500">暂无可用车型</Text> : <View className="space-y-3">
           {vehicles.map((vehicle, index) => (
             <VehicleCard
               key={vehicle.id}
               vehicle={vehicle}
               index={index}
               onSelect={handleVehicleClick}
+              disabled={openingVehicleId !== null}
             />
           ))}
         </View>}

@@ -5,11 +5,11 @@
  * - 点击"更换车型"回调;外部负责导航与草稿重置
  */
 
-import { View, Text } from '@tarojs/components'
+import { Image, View, Text } from '@tarojs/components'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Truck, Snowflake, ChevronRight } from 'lucide-react-taro'
+import { Snowflake, ChevronRight, Truck } from 'lucide-react-taro'
 import type { Vehicle } from '@/types/vehicle'
 
 interface Props {
@@ -19,19 +19,18 @@ interface Props {
 
 export const VehicleSummary: FC<Props> = ({ vehicle, onChange }) => {
   return (
-    <Card className="mb-4 bg-blue-50 border-blue-200">
+    <Card className="mb-3">
       <CardContent className="p-3">
         <View className="flex items-center gap-3">
-          {/* 车型缩略图(占位) */}
-          <View
-            className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: '#2088D8' }}
-          >
-            <Text className="block text-white text-base font-bold">{vehicle.name}</Text>
+          <View className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50">
+            {vehicle.images?.[0] ? (
+              <Image className="h-full w-full" mode="aspectFit" src={vehicle.images[0]} />
+            ) : (
+              <View className="flex flex-col items-center"><Truck size={26} color="#2088D8" /><Text className="block text-xs font-semibold text-slate-500">{vehicle.name}</Text></View>
+            )}
           </View>
           <View className="flex-1 min-w-0">
             <View className="flex items-center gap-2">
-              <Truck size={14} color="#2088D8" />
               <Text className="block text-sm font-medium text-slate-800 truncate">
                 {vehicle.fullName}
               </Text>
@@ -39,8 +38,8 @@ export const VehicleSummary: FC<Props> = ({ vehicle, onChange }) => {
                 <Snowflake size={12} color="#06B6D4" />
               )}
             </View>
-            <Text className="block text-xs text-slate-500 mt-1">
-              载重 {vehicle.specs.maxLoadKg} kg · {vehicle.specs.cargoVolume}
+            <Text className="block text-xs text-slate-500 mt-2">
+              载重 {vehicle.specs.maxLoadKg}kg · 容积 {vehicle.specs.cargoVolume}
             </Text>
             {vehicle.specs.temperatureRange && (
               <Text className="block text-xs text-cyan-600 mt-1">
