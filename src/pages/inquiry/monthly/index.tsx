@@ -170,28 +170,29 @@ const MonthlyInquiryPage: FC = () => {
           请填写以下信息，我们将在1个工作日内联系您提供包月专线方案
         </Text>
 
-        {/* 收发货地址 — 复用 AddressCard + 地址簿选择 */}
-        <Card className="mb-3">
-          <CardContent className="p-4">
-            <Text className="block text-base font-semibold text-slate-800 mb-3">配送地址</Text>
-            <AddressCard
-              role="sender"
-              address={senderAddress}
-              onTap={() => chooseAddress('sender')}
-              onEdit={() => editAddress('sender', senderAddress)}
-            />
-            <AddressRoleHeader
-              enabled={!!senderAddress && !!receiverAddress}
-              onSwap={swapAddresses}
-            />
-            <AddressCard
-              role="receiver"
-              address={receiverAddress}
-              onTap={() => chooseAddress('receiver')}
-              onEdit={() => editAddress('receiver', receiverAddress)}
-            />
-          </CardContent>
-        </Card>
+        {/* 收发货地址 — 统一卡片 */}
+        <View className="bg-white rounded-xl overflow-hidden mb-3">
+          <View className="px-4 pt-3 pb-2">
+            <Text className="block text-base font-semibold text-slate-800">配送地址</Text>
+          </View>
+          <AddressCard
+            role="sender"
+            address={senderAddress}
+            onTap={() => chooseAddress('sender')}
+            onEdit={() => editAddress('sender', senderAddress)}
+          />
+          <AddressRoleHeader
+            enabled={!!senderAddress && !!receiverAddress}
+            onSwap={swapAddresses}
+          />
+          <View className="mx-4 border-t border-dashed border-slate-200" />
+          <AddressCard
+            role="receiver"
+            address={receiverAddress}
+            onTap={() => chooseAddress('receiver')}
+            onEdit={() => editAddress('receiver', receiverAddress)}
+          />
+        </View>
 
         {/* 联系信息 */}
         <Card className="mb-3">

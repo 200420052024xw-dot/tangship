@@ -272,40 +272,46 @@ const OrderCreatePage: FC = () => {
           )}
         </View>
 
-        {/* 寄件 / 收件 */}
-        <View id={SECTION_IDS.sender}>
-          <AddressCard
-            role="sender"
-            address={draft.senderAddress}
-            onTap={() => chooseAddress('sender')}
-            onEdit={() => editAddress('sender', draft.senderAddress)}
-            highlight={activeSection === SECTION_IDS.sender && !!errors.senderAddress}
-          />
-          {errors.senderAddress && (
-            <Text className="block text-xs text-red-500 mb-2">{errors.senderAddress}</Text>
-          )}
-        </View>
+        {/* 寄件 / 收件 — 统一卡片 */}
+        <View className="bg-white rounded-xl overflow-hidden">
+          <View id={SECTION_IDS.sender}>
+            <AddressCard
+              role="sender"
+              address={draft.senderAddress}
+              onTap={() => chooseAddress('sender')}
+              onEdit={() => editAddress('sender', draft.senderAddress)}
+              highlight={activeSection === SECTION_IDS.sender && !!errors.senderAddress}
+            />
+          </View>
 
-        <AddressRoleHeader
-          enabled={Boolean(draft.senderAddress && draft.receiverAddress)}
-          onSwap={() => {
-            swapAddresses()
-            Taro.showToast({ title: '已交换寄件与收件地址', icon: 'none' })
-          }}
-        />
-
-        <View id={SECTION_IDS.receiver}>
-          <AddressCard
-            role="receiver"
-            address={draft.receiverAddress}
-            onTap={() => chooseAddress('receiver')}
-            onEdit={() => editAddress('receiver', draft.receiverAddress)}
-            highlight={activeSection === SECTION_IDS.receiver && !!errors.receiverAddress}
+          {/* 交换按钮 — 居中于两个地址之间 */}
+          <AddressRoleHeader
+            enabled={Boolean(draft.senderAddress && draft.receiverAddress)}
+            onSwap={() => {
+              swapAddresses()
+              Taro.showToast({ title: '已交换', icon: 'none' })
+            }}
           />
-          {errors.receiverAddress && (
-            <Text className="block text-xs text-red-500 mb-2">{errors.receiverAddress}</Text>
-          )}
+
+          {/* 分隔虚线 */}
+          <View className="mx-4 border-t border-dashed border-slate-200" />
+
+          <View id={SECTION_IDS.receiver}>
+            <AddressCard
+              role="receiver"
+              address={draft.receiverAddress}
+              onTap={() => chooseAddress('receiver')}
+              onEdit={() => editAddress('receiver', draft.receiverAddress)}
+              highlight={activeSection === SECTION_IDS.receiver && !!errors.receiverAddress}
+            />
+          </View>
         </View>
+        {errors.senderAddress && (
+          <Text className="block text-xs text-red-500 mt-1">{errors.senderAddress}</Text>
+        )}
+        {errors.receiverAddress && (
+          <Text className="block text-xs text-red-500 mt-1">{errors.receiverAddress}</Text>
+        )}
 
         {/* 物品 */}
         <View id={SECTION_IDS.goods}>

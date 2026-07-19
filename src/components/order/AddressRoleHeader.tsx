@@ -1,14 +1,14 @@
 /**
- * 地址角色切换条 — 寄件/收件之间的"交换"提示行
+ * 地址交换按钮 — 寄件/收件之间的圆形交换按钮
  *
- * - 仅展示分隔提示 + 交换按钮
- * - 点击交换会整体交换寄件/收件地址(联系人、电话、坐标、详细地址)
- * - 当任一地址未填时不展示该按钮(避免无意义交换)
+ * - 居中悬浮在两个地址卡片之间
+ * - 点击交换寄件/收件地址
+ * - 当任一地址未填时不展示
  */
 
-import { View, Text } from '@tarojs/components'
+import { View } from '@tarojs/components'
 import type { FC } from 'react'
-import { ArrowLeftRight } from 'lucide-react-taro'
+import { ArrowUpDown } from 'lucide-react-taro'
 
 interface Props {
   /** 是否允许交换(双方都已选) */
@@ -17,19 +17,26 @@ interface Props {
 }
 
 export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
+  if (!enabled) return null
+
   return (
-    <View className="flex items-center justify-center -my-2">
+    <View className="flex items-center justify-center -my-3 relative z-10">
       <View
-        className={`flex items-center gap-1 px-3 py-1 bg-white rounded-full border border-slate-200 ${
-          enabled ? 'active:bg-slate-50 cursor-pointer' : 'opacity-50'
-        }`}
-        onClick={() => {
-          if (!enabled) return
-          onSwap()
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: '#F1F5F9',
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
+        className="active:bg-slate-200"
+        onClick={onSwap}
       >
-        <ArrowLeftRight size={12} color="#94A3B8" />
-        <Text className="block text-xs text-slate-500">交换寄件/收件</Text>
+        <ArrowUpDown size={14} color="#64748B" />
       </View>
     </View>
   )
