@@ -1,7 +1,7 @@
 /**
  * 地址交换按钮 — 寄件/收件之间，虚线水平穿过按钮正中间
  *
- * - 水平虚线贯穿整行，圆形交换按钮居中悬浮在线上
+ * - 水平虚线贯穿整行，方形交换按钮居中悬浮在线上
  * - 点击交换寄件/收件地址
  * - 当任一地址未填时不展示
  */
@@ -28,21 +28,20 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
       <View
         className="absolute left-0 right-0"
         style={{
-          height: 1,
           borderTopWidth: 1,
-          borderTopColor: '#CBD5E1',
+          borderTopColor: '#E2E8F0',
           borderTopStyle: 'dashed',
         }}
       />
-      {/* 圆形按钮 - 居中悬浮，白色底遮住虚线 */}
+      {/* 方形按钮 - 居中悬浮，白色底遮住虚线 */}
       <View
         style={{
           width: 22,
           height: 22,
-          borderRadius: 11,
+          borderRadius: 4,
           backgroundColor: '#FFFFFF',
           borderWidth: 1,
-          borderColor: '#CBD5E1',
+          borderColor: '#E2E8F0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
