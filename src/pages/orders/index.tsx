@@ -15,7 +15,6 @@ import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, In
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 import { ORDER_INITIAL_TAB_KEY, ORDER_TAB_FILTERS as TAB_FILTERS, ORDER_TAB_LABELS as TAB_LABELS } from '@/constants/order-display'
-import { DEMO_ORDERS } from '@/data/demo'
 import { primeOrderDetail, removeOrderSnapshots } from '@/services/order-detail'
 import { FixedActionBar } from '@/components/layout/fixed-action-bar'
 
@@ -76,13 +75,9 @@ export default function OrdersPage() {
     'my-orders-demo-v2',
     async () => {
       let raw: any[]
-      try {
-        const result = await consumerRequest<any[]>({ url: '/api/orders' })
-        console.log('[Orders] list response:', result)
-        raw = Array.isArray(result) ? result : []
-      } catch {
-        raw = DEMO_ORDERS
-      }
+      const result = await consumerRequest<any[]>({ url: '/api/orders' })
+      console.log('[Orders] list response:', result)
+      raw = Array.isArray(result) ? result : []
       return raw.map((o: any) => ({
         ...o,
         orderNo: o.order_no,
@@ -252,7 +247,7 @@ export default function OrdersPage() {
   )
 
   return (
-    <View className={`min-h-screen bg-background ${selecting ? 'pb-28' : ''}`}>
+    <View className={`min-h-screen bg-background ${selecting ? 'pb-36' : ''}`}>
       {/* Tab 筛选栏 */}
       <View className="border-b border-slate-100 bg-white px-2 pt-2">
         <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setSelectedIds(new Set()) }} className="w-full">
@@ -299,7 +294,7 @@ export default function OrdersPage() {
       </View>
 
       {selecting && (
-        <FixedActionBar bottom={0} safeArea={false}>
+        <FixedActionBar bottom={50} safeArea={false}>
           <View className="flex w-full flex-row items-center justify-between gap-4">
             <Text className="block min-w-0 flex-1 text-sm text-slate-600">已选择 {selectedIds.size} 个订单</Text>
             <Button className="shrink-0" variant="destructive" disabled={!selectedIds.size || deleting} onClick={() => setDeleteDialogOpen(true)}>

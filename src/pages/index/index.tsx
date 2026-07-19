@@ -28,7 +28,6 @@ import type { Vehicle } from '@/types/vehicle'
 import { useSWR } from '@/stores/data-cache'
 import { consumerRequest } from '@/services/consumer-api'
 import { Skeleton } from '@/components/ui/skeleton'
-import { DEMO_BANNERS, getDemoVehicles } from '@/data/demo'
 import { primeVehicleCache } from '@/services/vehicle-catalog'
 import './index.css'
 
@@ -39,27 +38,19 @@ const IndexPage: FC = () => {
   const navigatingRef = useRef(false)
   const { data: catalog, loading: loadingCatalog } = useSWR<Vehicle[]>(
     `vehicles-demo-v2-${activeTab}`, async () => {
-      try {
-        const result = await consumerRequest<Vehicle[]>({ url: `/api/content/vehicles?mode=${activeTab}` })
-        return result?.length ? result : getDemoVehicles(activeTab)
-      } catch {
-        return getDemoVehicles(activeTab)
-      }
+      const result = await consumerRequest<Vehicle[]>({ url: `/api/content/vehicles?mode=${activeTab}` })
+      return result || []
     }, 'static'
   )
   const { data: banners } = useSWR<BannerItem[]>(
     'banners-demo-v2', async () => {
-      try {
-        const result = await consumerRequest<BannerItem[]>({ url: '/api/content/banners' })
-        return result?.length ? result : DEMO_BANNERS
-      } catch {
-        return DEMO_BANNERS
-      }
+      const result = await consumerRequest<BannerItem[]>({ url: '/api/content/banners' })
+      return result || []
     }, 'static'
   )
 
-  const vehicles = catalog?.length ? catalog : getDemoVehicles(activeTab)
-  const visibleBanners = banners?.length ? banners : DEMO_BANNERS
+  const vehicles = catalog || []
+  const visibleBanners = banners || []
 
   /** 点击车型卡片 → 统一进入车型详情页 */
   const handleVehicleClick = async (vehicle: Vehicle) => {

@@ -11,7 +11,6 @@ import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ORDER_INITIAL_TAB_KEY } from '@/constants/order-display'
-import { DEMO_ORDER_STATS, DEMO_USER } from '@/data/demo'
 
 type UserInfo = { nickname: string; openid: string }
 type OrderStats = { pendingPayment: number; pendingReview: number; active: number; completed: number; totalSpent: number }
@@ -19,15 +18,13 @@ type OrderStats = { pendingPayment: number; pendingReview: number; active: numbe
 export default function ProfilePage() {
   const { data: user, loading: loadingUser, refresh: refreshUser } = useSWR<UserInfo>(
     'user-info-demo-v2', async () => {
-      try { return await consumerRequest<UserInfo>({ url: '/api/auth/me' }) } catch { return DEMO_USER }
+      return await consumerRequest<UserInfo>({ url: '/api/auth/me' })
     }, 'session'
   )
   const { data: stats, refresh: refreshStats } = useSWR<OrderStats>(
     'order-stats-demo-v2', async () => {
-      try {
-        const result = await consumerRequest<OrderStats>({ url: '/api/orders/stats' })
-        return result || DEMO_ORDER_STATS
-      } catch { return DEMO_ORDER_STATS }
+      const result = await consumerRequest<OrderStats>({ url: '/api/orders/stats' })
+      return result || { pendingPayment: 0, pendingReview: 0, active: 0, completed: 0, totalSpent: 0 }
     }, 'dynamic'
   )
   const [showUserDialog, setShowUserDialog] = useState(false)

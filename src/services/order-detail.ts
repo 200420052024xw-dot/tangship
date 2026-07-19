@@ -1,5 +1,4 @@
 import { consumerRequest } from '@/services/consumer-api'
-import { findDemoOrder } from '@/data/demo'
 
 export type OrderDetail = Record<string, any>
 
@@ -11,7 +10,7 @@ export function primeOrderDetail(order: OrderDetail): void {
 }
 
 export function getOrderSnapshot(id: string): OrderDetail | null {
-  return orderCache.get(id) || findDemoOrder(id) || null
+  return orderCache.get(id) || null
 }
 
 export function removeOrderSnapshots(ids: string[]): void {
@@ -19,12 +18,6 @@ export function removeOrderSnapshots(ids: string[]): void {
 }
 
 export async function refreshOrderDetail(id: string): Promise<OrderDetail> {
-  const demoOrder = findDemoOrder(id)
-  if (demoOrder) {
-    primeOrderDetail(demoOrder)
-    return demoOrder
-  }
-
   const existingRequest = pendingRequests.get(id)
   if (existingRequest) return existingRequest
 

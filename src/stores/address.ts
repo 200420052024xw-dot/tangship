@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import Taro from '@tarojs/taro'
 import type { Address, AddressLabel, AddressUsage } from '@/types/address'
 import { consumerRequest } from '@/services/consumer-api'
-import { DEMO_ADDRESSES } from '@/data/demo'
 
 const LEGACY_KEY = 'address_list_v2'
 const MIGRATED_KEY = 'address_sqlite_migrated_v1'
@@ -37,9 +36,9 @@ export const useAddressStore = create<AddressStore>((set, get) => ({
     try {
       try { await migrateLegacy() } catch { /* 保留旧数据，下一次加载安全重试 */ }
       const rows = await consumerRequest<any[]>({ url: '/api/addresses' })
-      set({ addressList: rows.length ? rows.map(fromApi) : DEMO_ADDRESSES })
+      set({ addressList: rows.length ? rows.map(fromApi) : [] })
     } catch {
-      set({ addressList: DEMO_ADDRESSES })
+      set({ addressList: [] })
     } finally { set({ loading: false }) }
   },
   saveAddress: async address => {

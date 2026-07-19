@@ -12,7 +12,6 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { CircleCheck, Phone, MessageCircle, Mail, Clock } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
-import { DEMO_CONTACT } from '@/data/demo'
 
 interface ContactInfo {
   phone: string
@@ -21,6 +20,8 @@ interface ContactInfo {
   workTime: string
   extraText: string
 }
+
+const EMPTY_CONTACT: ContactInfo = { phone: '', wechat: '', email: '', workTime: '', extraText: '' }
 
 interface Props {
   open: boolean
@@ -38,7 +39,7 @@ export const ContactPopup: FC<Props> = ({
   showSuccessIcon = true,
 }) => {
   // 首次渲染即提供完整内容，避免弹窗打开后因异步加载联系方式而突然增高。
-  const [contact, setContact] = useState<ContactInfo>(DEMO_CONTACT)
+  const [contact, setContact] = useState<ContactInfo>(EMPTY_CONTACT)
 
   useEffect(() => {
     consumerRequest<Partial<ContactInfo>>({ url: '/api/content/contact' })

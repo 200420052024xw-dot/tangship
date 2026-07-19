@@ -21,7 +21,6 @@ import { consumerRequest } from '@/services/consumer-api'
 import type { Vehicle } from '@/types/vehicle'
 import { PageHeader } from '@/components/layout/page-header'
 import { FixedActionBar } from '@/components/layout/fixed-action-bar'
-import { getDemoVehicles } from '@/data/demo'
 
 const SelectVehiclePage: FC = () => {
   const router = Taro.getCurrentInstance().router
@@ -38,9 +37,9 @@ const SelectVehiclePage: FC = () => {
     consumerRequest<Vehicle[]>({ url: `/api/content/vehicles?mode=${mode}` })
       .then(data => {
         console.log('[SelectVehicle] vehicles:', data?.length)
-        setVehicles(data?.length ? data : getDemoVehicles(mode))
+        setVehicles(data || [])
       })
-      .catch(() => setVehicles(getDemoVehicles(mode)))
+      .catch(() => setVehicles([]))
       .finally(() => setLoading(false))
   }, [mode])
 

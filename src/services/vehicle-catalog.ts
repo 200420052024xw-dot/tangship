@@ -1,6 +1,5 @@
 import { Network } from '@/network'
 import type { Vehicle } from '@/types/vehicle'
-import { getDemoVehicle } from '@/data/demo'
 
 const vehicleCache = new Map<string, Vehicle>()
 const pendingRequests = new Map<string, Promise<Vehicle>>()
@@ -10,7 +9,7 @@ export function primeVehicleCache(vehicle: Vehicle): void {
 }
 
 export function getVehicleSnapshot(id: string): Vehicle | null {
-  return vehicleCache.get(id) || getDemoVehicle(id)
+  return vehicleCache.get(id) || null
 }
 
 async function requestVehicle(id: string): Promise<Vehicle> {
@@ -18,18 +17,13 @@ async function requestVehicle(id: string): Promise<Vehicle> {
   if (existingRequest) return existingRequest
 
   const request = (async () => {
-    try {
-      const response = await Network.request({ url: `/api/content/vehicles/${encodeURIComponent(id)}` })
-      console.log('[vehicle-catalog] response:', response.data)
-      const body = response.data as { code?: number; msg?: string; data?: Vehicle }
-      if (response.statusCode === 200 && body.data) {
-        primeVehicleCache(body.data)
-        return body.data
-      }
-    } catch { /* 使用已缓存或本地演示车型兜底 */ }
-
-    const fallbackVehicle = getVehicleSnapshot(id)
-    if (fallbackVehicle) return fallbackVehicle
+    const response = await Network.request({ url: `/api/content/vehicles/${encodeURIComponent(id)}` })
+    console.log('[vehicle-catalog] response:', response.data)
+    const body = response.data as { code?: number; msg?: string; data?: Vehicle }
+    if (response.statusCode === 200 && body.data) {
+      primeVehicleCache(body.data)
+      return body.data
+    }
     throw new Error('车型加载失败')
   })()
 
