@@ -208,7 +208,7 @@ export default function OrdersPage() {
               {/* 第一行：车型名 + 状态标签 */}
               <View className="flex flex-row items-center justify-between">
                 <View className="flex flex-row items-center gap-2">
-                  {selecting && <Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleSelected(order.id)} />}
+                  {selecting && <Checkbox checked={selectedIds.has(order.id)} />}
                   <Text className="block text-sm font-semibold text-slate-900">{order.vehicleName || order.vehicleId}</Text>
                 </View>
                 <View className="flex flex-row items-center gap-1">
@@ -297,7 +297,15 @@ export default function OrdersPage() {
         <FixedActionBar bottom={50} safeArea={false}>
           <View className="flex w-full flex-row items-center justify-between gap-4">
             <Text className="block min-w-0 flex-1 text-sm text-slate-600">已选择 {selectedIds.size} 个订单</Text>
-            <Button className="shrink-0" variant="destructive" disabled={!selectedIds.size || deleting} onClick={() => setDeleteDialogOpen(true)}>
+            <Button
+              className="shrink-0"
+              variant="destructive"
+              disabled={!selectedIds.size || deleting}
+              onClick={() => {
+                if (!selectedIds.size) { Taro.showToast({ title: '请先选择要删除的订单', icon: 'none' }); return }
+                setDeleteDialogOpen(true)
+              }}
+            >
               <Text className="block">{deleting ? '删除中…' : '确认删除'}</Text>
             </Button>
           </View>
