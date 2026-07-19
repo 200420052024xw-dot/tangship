@@ -523,17 +523,23 @@ export const CANONICAL_VEHICLES = [
       "禁运危险化学品"
     ],
     "supportedModes": [
+      "single",
+      "monthly",
       "rental",
       "purchase"
     ],
-    "serviceMode": "rental",
+    "serviceMode": "single",
     "pricingDescription": {
-      "description": "整车采购一次性付款,具体报价请联系销售。最终费用以合同为准。",
-      "startFrom": 85000,
+      "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
+      "startFrom": 50,
       "breakdown": [
         {
-          "label": "整车采购参考价",
-          "amount": 85000
+          "label": "起步价(含基础里程)",
+          "amount": 50
+        },
+        {
+          "label": "超出起步里程,按公里数加价",
+          "amount": "以实际路线为准"
         }
       ]
     },
@@ -567,21 +573,23 @@ export const CANONICAL_VEHICLES = [
       "禁运危险化学品"
     ],
     "supportedModes": [
+      "single",
+      "monthly",
       "rental",
       "purchase"
     ],
-    "serviceMode": "rental",
+    "serviceMode": "single",
     "pricingDescription": {
-      "description": "租赁按月计费,采购为一次性付款。具体报价请联系销售。",
-      "startFrom": 5000,
+      "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
+      "startFrom": 45,
       "breakdown": [
         {
-          "label": "租赁参考价",
-          "amount": "5000 元/月"
+          "label": "起步价(含基础里程)",
+          "amount": 45
         },
         {
-          "label": "整车采购参考价",
-          "amount": 80000
+          "label": "超出起步里程,按公里数加价",
+          "amount": "以实际路线为准"
         }
       ]
     },
@@ -616,21 +624,23 @@ export const CANONICAL_VEHICLES = [
       "禁运货物"
     ],
     "supportedModes": [
+      "single",
+      "monthly",
       "rental",
       "purchase"
     ],
-    "serviceMode": "rental",
+    "serviceMode": "single",
     "pricingDescription": {
-      "description": "租赁按月计费,采购为一次性付款。具体报价请联系销售。",
-      "startFrom": 4500,
+      "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
+      "startFrom": 40,
       "breakdown": [
         {
-          "label": "租赁参考价",
-          "amount": "4500 元/月"
+          "label": "起步价(含基础里程)",
+          "amount": 40
         },
         {
-          "label": "整车采购参考价",
-          "amount": 65000
+          "label": "超出起步里程,按公里数加价",
+          "amount": "以实际路线为准"
         }
       ]
     },
@@ -663,16 +673,23 @@ export const CANONICAL_VEHICLES = [
       "具体参数以安装车型为准"
     ],
     "supportedModes": [
+      "single",
+      "monthly",
+      "rental",
       "purchase"
     ],
-    "serviceMode": "rental",
+    "serviceMode": "single",
     "pricingDescription": {
-      "description": "套件采购一次性付款,具体型号与价格请联系销售。",
-      "startFrom": 38000,
+      "description": "起步价含 3 公里以内基础里程费;超出部分按公里数加价。最终费用由服务端根据实际路线核验。",
+      "startFrom": 35,
       "breakdown": [
         {
-          "label": "套件采购参考价",
-          "amount": 38000
+          "label": "起步价(含基础里程)",
+          "amount": 35
+        },
+        {
+          "label": "超出起步里程,按公里数加价",
+          "amount": "以实际路线为准"
         }
       ]
     },

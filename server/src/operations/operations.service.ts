@@ -80,6 +80,10 @@ export class OperationsService implements OnModuleInit {
     }
     // 将数据库中残留的 SVG 假图替换为 TOS 真实图片
     await this.replaceSvgImagesWithReal();
+    // 确保 rental 车型也出现在按趟配送中
+    await this.ensureRentalVehiclesInSingleMode();
+    // 更新轮播图为车型真实图片
+    await this.updateBannersToRealImages();
   }
 
   async listVehicles(admin = false, serviceMode?: string) {
@@ -172,10 +176,17 @@ export class OperationsService implements OnModuleInit {
     const { data: rows, error } = await query;
     if (error) throw new Error(`查询轮播图失败: ${error.message}`);
 
-    const result = (rows || []).map((v: any) => ({
-      id: v.id, image: v.image_url, imageUrl: v.image_url, title: v.title,
-      linkType: v.link_type, linkTarget: v.link_target, sortOrder: v.sort_order,
-      sort: v.sort_order, enabled: !!v.enabled, createdAt: v.created_at, updatedAt: v.updated_at,
+    const result = await Promise.all((rows || []).map(async (v: any) => {
+      let imageUrl = v.image_url;
+      // 如果有 TOS object_key，动态生成签名 URL（避免签名过期）
+      if (v.object_key && v.object_key.length > 0) {
+        try { imageUrl = await this.storage.getSignedUrl(v.object_key, 86400); } catch {}
+      }
+      return {
+        id: v.id, image: imageUrl, imageUrl, title: v.title,
+        linkType: v.link_type, linkTarget: v.link_target, sortOrder: v.sort_order,
+        sort: v.sort_order, enabled: !!v.enabled, createdAt: v.created_at, updatedAt: v.updated_at,
+      };
     }));
 
     serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
@@ -406,18 +417,104 @@ export class OperationsService implements OnModuleInit {
   private async seedBanners() {
     const client = this.getClient();
     const t = utc();
-    const banners: [string, string, string, string, string][] = [
-      ['b1', '按趟配送，即刻出发', '灵活调度，城市末端高效送达', '#3B82F6', '#1D4ED8'],
-      ['b2', '企业包月，省心省钱', '固定线路包月方案，专属运力保障', '#10B981', '#059669'],
-      ['b3', '冷链配送，品质保障', '全程温控，生鲜医药安全送达', '#06B6D4', '#0891B2'],
+    // 轮播图使用车型真实 TOS 图片，不再用 SVG 文字占位
+    const banners: { id: string; title: string; linkType: string; linkTarget: string; vehicleId: string }[] = [
+      { id: 'b1', title: 'Z5(2026) 厢式货车 — 按趟即刻出发', linkType: 'vehicle', linkTarget: 'z5-2026', vehicleId: 'z5-2026' },
+      { id: 'b2', title: 'Z8Max 冷藏配送 — 全程温控保障', linkType: 'vehicle', linkTarget: 'z8-max-c', vehicleId: 'z8-max-c' },
+      { id: 'b3', title: 'Z5 多格货柜 — 企业包月专线', linkType: 'monthly', linkTarget: '', vehicleId: 'z5-multi' },
     ];
     for (let i = 0; i < banners.length; i++) {
-      const [id, title, sub, c1, c2] = banners[i];
+      const { id, title, linkType, linkTarget, vehicleId } = banners[i];
+      let imageUrl = '';
+      let objectKey = '';
+      // 从 vehicle_images 获取该车型的 TOS 真实图片
+      const tosKey = REAL_VEHICLE_IMAGE_KEYS[vehicleId];
+      if (tosKey) {
+        objectKey = tosKey;
+        try { imageUrl = await this.storage.getSignedUrl(tosKey, 31536000); } catch {}
+      }
+      if (!imageUrl) {
+        // fallback: 从数据库取已有图片
+        const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', vehicleId).eq('is_primary', 1).maybeSingle();
+        if (img) { imageUrl = img.url; objectKey = img.object_key || ''; }
+      }
       await client.from('content_banners').insert({
-        id, image_url: this.bannerSvg(title, sub, c1, c2), object_key: '',
-        title, link_type: i === 0 ? 'vehicle' : 'monthly', link_target: i === 0 ? 'z2' : '',
+        id, image_url: imageUrl, object_key: objectKey,
+        title, link_type: linkType, link_target: linkTarget,
         sort_order: i, enabled: 1, created_at: t, updated_at: t,
       });
+    }
+  }
+
+  /** 确保 rental 车型也出现在按趟配送(single)模式中 */
+  private async ensureRentalVehiclesInSingleMode() {
+    const RENTAL_IDS = ['z8-chassis', 'z5-security', 'yokee', 'l4-kit'];
+    try {
+      const client = this.getClient();
+      for (const vid of RENTAL_IDS) {
+        const { data: row } = await client.from('vehicle_catalog').select('id,service_mode,modes_json').eq('id', vid).maybeSingle();
+        if (!row) continue;
+        const modes: string[] = Array.isArray(row.modes_json) ? row.modes_json : JSON.parse(row.modes_json || '[]');
+        if (modes.includes('single') && row.service_mode === 'single') continue; // already updated
+        const newModes = [...new Set([...modes, 'single', 'monthly'])];
+        await client.from('vehicle_catalog').update({
+          service_mode: 'single',
+          modes_json: JSON.stringify(newModes),
+          updated_at: new Date().toISOString(),
+        }).eq('id', vid);
+        console.log(`[VehicleMode] Updated ${vid}: service_mode=single, modes=${newModes.join(',')}`);
+      }
+    } catch (e) {
+      console.error('[VehicleMode] Failed to update rental vehicles:', e?.message || e);
+    }
+  }
+
+  /** 更新轮播图为车型真实 TOS 图片 */
+  private async updateBannersToRealImages() {
+    try {
+      const client = this.getClient();
+      const bannerConfigs = [
+        { id: 'b1', title: 'Z5(2026) 厢式货车 — 按趟即刻出发', vehicleId: 'z5-2026', linkType: 'vehicle', linkTarget: 'z5-2026' },
+        { id: 'b2', title: 'Z8Max 冷藏配送 — 全程温控保障', vehicleId: 'z8-max-c', linkType: 'vehicle', linkTarget: 'z8-max-c' },
+        { id: 'b3', title: 'Z5 多格货柜 — 企业包月专线', vehicleId: 'z5-multi', linkType: 'monthly', linkTarget: '' },
+      ];
+      for (const cfg of bannerConfigs) {
+        const { data: existing } = await client.from('content_banners').select('id,image_url').eq('id', cfg.id).maybeSingle();
+        const tosKey = REAL_VEHICLE_IMAGE_KEYS[cfg.vehicleId];
+        let imageUrl = '';
+        let objectKey = tosKey || '';
+        if (tosKey) {
+          try { imageUrl = await this.storage.getSignedUrl(tosKey, 31536000); } catch {}
+        }
+        if (!imageUrl) {
+          const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', cfg.vehicleId).eq('is_primary', 1).maybeSingle();
+          if (img) { imageUrl = img.url; objectKey = img.object_key || ''; }
+        }
+        if (!imageUrl) continue;
+        if (existing) {
+          // 如果已有记录但图片不是车型真实图片，则更新
+          const isOldSvg = (existing.image_url || '').includes('svg+xml') || (existing.image_url || '').includes('bannerSvg');
+          if (isOldSvg || !existing.image_url) {
+            await client.from('content_banners').update({
+              image_url: imageUrl, object_key: objectKey, title: cfg.title,
+              link_type: cfg.linkType, link_target: cfg.linkTarget,
+              updated_at: new Date().toISOString(),
+            }).eq('id', cfg.id);
+            console.log(`[Banner] Updated ${cfg.id} with real vehicle image`);
+          }
+        } else {
+          // 不存在则插入
+          await client.from('content_banners').insert({
+            id: cfg.id, image_url: imageUrl, object_key: objectKey, title: cfg.title,
+            link_type: cfg.linkType, link_target: cfg.linkTarget,
+            sort_order: cfg.id === 'b1' ? 0 : cfg.id === 'b2' ? 1 : 2,
+            enabled: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          });
+          console.log(`[Banner] Created ${cfg.id} with real vehicle image`);
+        }
+      }
+    } catch (e) {
+      console.error('[Banner] Failed to update banners:', e?.message || e);
     }
   }
 

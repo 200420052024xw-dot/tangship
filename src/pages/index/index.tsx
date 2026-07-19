@@ -123,13 +123,25 @@ const IndexPage: FC = () => {
           >
             {visibleBanners.map(banner => (
               <SwiperItem key={banner.id} onClick={() => handleBannerClick(banner)}>
-                <View className="relative flex h-44 w-full items-center bg-blue-50">
-                  {banner.image && <Image className="absolute inset-0 h-full w-full" mode="aspectFill" src={banner.image} />}
-                  <View className="relative z-10 max-w-xs px-5">
-                    <Text className="block whitespace-pre-line text-xl font-bold leading-relaxed text-slate-900">{banner.title}</Text>
-                    {!banner.image && <Text className="mt-2 block text-xs text-primary">安全可靠 · 准时送达</Text>}
-                  </View>
-                  {!banner.image && <View className="absolute -bottom-8 -right-8 h-36 w-36 rounded-full bg-blue-100" />}
+                <View className="relative h-44 w-full overflow-hidden">
+                  {banner.image ? (
+                    <>
+                      <Image className="h-full w-full" mode="aspectFill" src={banner.image} />
+                      <View className="absolute bottom-0 left-0 right-0 px-4 py-3" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}>
+                        <Text className="block text-sm font-semibold text-white">{banner.title}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View className="flex h-full w-full items-center bg-blue-50">
+                        <View className="max-w-xs px-5">
+                          <Text className="block whitespace-pre-line text-xl font-bold leading-relaxed text-slate-900">{banner.title}</Text>
+                          <Text className="mt-2 block text-xs text-primary">安全可靠 · 准时送达</Text>
+                        </View>
+                      </View>
+                      <View className="absolute -bottom-8 -right-8 h-36 w-36 rounded-full bg-blue-100" />
+                    </>
+                  )}
                 </View>
               </SwiperItem>
             ))}

@@ -4,8 +4,9 @@ import type { Address } from '@/types/address'
 import type { Vehicle, VehicleMode } from '@/types/vehicle'
 
 export const DEMO_BANNERS: BannerItem[] = [
-  { id: 'demo-banner-main', image: '', title: '无人配送\n更高效 更省心', linkType: 'activity', linkTarget: '', sort: 1, enabled: true },
-  { id: 'demo-banner-monthly', image: '', title: '企业包月专线\n稳定运力 灵活调度', linkType: 'monthly', linkTarget: '', sort: 2, enabled: true },
+  { id: 'demo-banner-main', image: '', title: 'Z5(2026) 厢式货车 — 按趟即刻出发', linkType: 'vehicle', linkTarget: 'z5-2026', sort: 1, enabled: true },
+  { id: 'demo-banner-monthly', image: '', title: 'Z8Max 冷藏配送 — 全程温控保障', linkType: 'vehicle', linkTarget: 'z8-max-c', sort: 2, enabled: true },
+  { id: 'demo-banner-multi', image: '', title: 'Z5 多格货柜 — 企业包月专线', linkType: 'monthly', linkTarget: '', sort: 3, enabled: true },
 ]
 
 export function getDemoVehicles(mode: VehicleMode): Vehicle[] {
