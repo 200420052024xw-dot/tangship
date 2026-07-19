@@ -6,12 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
-import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Inbox, Trash2 } from 'lucide-react-taro'
+import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Inbox, Trash2, Check } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 import { ORDER_INITIAL_TAB_KEY, ORDER_TAB_FILTERS as TAB_FILTERS, ORDER_TAB_LABELS as TAB_LABELS } from '@/constants/order-display'
@@ -208,7 +207,17 @@ export default function OrdersPage() {
               {/* 第一行：车型名 + 状态标签 */}
               <View className="flex flex-row items-center justify-between">
                 <View className="flex flex-row items-center gap-2">
-                  {selecting && <Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleSelected(order.id)} />}
+                  {selecting && (
+                    <View
+                      className="h-5 w-5 rounded-full border-2 flex items-center justify-center"
+                      style={{
+                        borderColor: selectedIds.has(order.id) ? '#3b82f6' : '#cbd5e1',
+                        backgroundColor: selectedIds.has(order.id) ? '#3b82f6' : 'transparent',
+                      }}
+                    >
+                      {selectedIds.has(order.id) && <Check color="#fff" size={12} strokeWidth={3} />}
+                    </View>
+                  )}
                   <Text className="block text-sm font-semibold text-slate-900">{order.vehicleName || order.vehicleId}</Text>
                 </View>
                 <View className="flex flex-row items-center gap-1">
