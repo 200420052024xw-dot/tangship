@@ -19,7 +19,11 @@ export const FixedActionBar: FC<FixedActionBarProps> = ({ children, fixed = true
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        paddingBottom: safeArea ? 'calc(12px + env(safe-area-inset-bottom, 0px))' : 12,
+        paddingBottom: safeArea
+          ? 'calc(12px + env(safe-area-inset-bottom, 0px))'
+          : bottom > 0
+            ? 0
+            : 12,
         zIndex: 100,
       } : {
         display: 'flex',

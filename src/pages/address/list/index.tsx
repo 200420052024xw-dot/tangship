@@ -56,10 +56,10 @@ const AddressListPage: FC = () => {
   const selectionReturned = useRef(false)
   useDidShow(() => { loadAddresses().catch(error => Taro.showToast({ title: error instanceof Error ? error.message : '地址加载失败', icon: 'none' })) })
 
-  // 按 usage 筛选
-  const filteredList = addressList.filter(
-    a => a.usageType === usage || a.usageType === 'both'
-  )
+  // 选择模式下按 usage 筛选，管理模式下显示全部地址
+  const filteredList = selectMode
+    ? addressList.filter(a => a.usageType === usage || a.usageType === 'both')
+    : addressList
 
   const handleBack = () => Taro.navigateBack()
 
@@ -156,6 +156,11 @@ const AddressListPage: FC = () => {
                           className={`text-xs px-2 py-0 border-0 ${TAG_COLOR[address.label] || TAG_COLOR.其他}`}
                         >
                           {address.label}
+                        </Badge>
+                      )}
+                      {!selectMode && address.usageType && (
+                        <Badge className="text-xs px-2 py-0 border-0 bg-slate-100 text-slate-600">
+                          {USAGE_LABELS[address.usageType]}
                         </Badge>
                       )}
                       {address.isDefault && (
