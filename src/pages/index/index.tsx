@@ -53,21 +53,11 @@ const IndexPage: FC = () => {
     return colors[bannerId] || '#2088D8'
   }
 
-  /** 点击车型卡片 → 按趟进入详情页; 包月/租购进入信息填写页 */
+  /** 点击车型卡片 → 统一进入车型详情页 */
   const handleVehicleClick = (vehicle: Vehicle) => {
-    if (activeTab === 'single') {
-      Taro.navigateTo({
-        url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=single`,
-      }).catch(() => Taro.showToast({ title: '车型详情打开失败', icon: 'none' }))
-    } else if (activeTab === 'monthly') {
-      Taro.navigateTo({
-        url: `/pages/inquiry/monthly/index?vehicleId=${encodeURIComponent(vehicle.id)}`,
-      }).catch(() => Taro.showToast({ title: '页面打开失败', icon: 'none' }))
-    } else {
-      Taro.navigateTo({
-        url: `/pages/inquiry/rental/index?vehicleId=${encodeURIComponent(vehicle.id)}`,
-      }).catch(() => Taro.showToast({ title: '页面打开失败', icon: 'none' }))
-    }
+    Taro.navigateTo({
+      url: `/pages/vehicle/detail/index?vehicleId=${encodeURIComponent(vehicle.id)}&mode=${activeTab}`,
+    }).catch(() => Taro.showToast({ title: '车型详情打开失败', icon: 'none' }))
   }
 
   /** 轮播图点击 */
