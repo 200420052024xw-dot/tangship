@@ -208,7 +208,7 @@ export default function OrdersPage() {
               {/* 第一行：车型名 + 状态标签 */}
               <View className="flex flex-row items-center justify-between">
                 <View className="flex flex-row items-center gap-2">
-                  {selecting && <Checkbox checked={selectedIds.has(order.id)} />}
+                  {selecting && <Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleSelected(order.id)} />}
                   <Text className="block text-sm font-semibold text-slate-900">{order.vehicleName || order.vehicleId}</Text>
                 </View>
                 <View className="flex flex-row items-center gap-1">
