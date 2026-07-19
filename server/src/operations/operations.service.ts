@@ -84,6 +84,8 @@ export class OperationsService implements OnModuleInit {
     await this.ensureRentalVehiclesInSingleMode();
     // 更新轮播图为车型真实图片
     await this.updateBannersToRealImages();
+    // 禁用没有真实图片的车型
+    await this.disableNoImageVehicles();
   }
 
   async listVehicles(admin = false, serviceMode?: string) {
@@ -466,6 +468,22 @@ export class OperationsService implements OnModuleInit {
       }
     } catch (e) {
       console.error('[VehicleMode] Failed to update rental vehicles:', e?.message || e);
+    }
+  }
+
+  /** 禁用没有真实图片的车型 */
+  private async disableNoImageVehicles() {
+    const DISABLE_IDS = ['l5', 'z8-chassis', 'z5-security', 'yokee', 'l4-kit', 'l5-monthly'];
+    try {
+      const client = this.getClient();
+      for (const vid of DISABLE_IDS) {
+        const { data: row } = await client.from('vehicle_catalog').select('id,enabled').eq('id', vid).maybeSingle();
+        if (!row || !row.enabled) continue;
+        await client.from('vehicle_catalog').update({ enabled: false, updated_at: new Date().toISOString() }).eq('id', vid);
+        console.log(`[VehicleDisable] Disabled no-image vehicle: ${vid}`);
+      }
+    } catch (e) {
+      console.error('[VehicleDisable] Failed:', e?.message || e);
     }
   }
 

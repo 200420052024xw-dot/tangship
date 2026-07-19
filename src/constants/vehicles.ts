@@ -110,7 +110,7 @@ export const VEHICLES: Vehicle[] = [
       ],
     },
     tags: ['园区', '定点'],
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'l5-max',
@@ -338,7 +338,7 @@ export const VEHICLES: Vehicle[] = [
       ],
     },
     tags: ['底盘', '可定制'],
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'z5-security',
@@ -366,7 +366,7 @@ export const VEHICLES: Vehicle[] = [
       ],
     },
     tags: ['安防', '特殊'],
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'yokee',
@@ -394,7 +394,7 @@ export const VEHICLES: Vehicle[] = [
       ],
     },
     tags: ['观光', '载客'],
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'l4-kit',
@@ -422,7 +422,7 @@ export const VEHICLES: Vehicle[] = [
       ],
     },
     tags: ['套件', '改装'],
-    enabled: true,
+    enabled: false,
   },
 ]
 

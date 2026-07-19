@@ -157,11 +157,7 @@ export const CANONICAL_VEHICLES = [
         }
       ]
     },
-    "tags": [
-      "园区",
-      "定点"
-    ],
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "l5-max",
@@ -547,7 +543,7 @@ export const CANONICAL_VEHICLES = [
       "底盘",
       "可定制"
     ],
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "z5-security",
@@ -597,7 +593,7 @@ export const CANONICAL_VEHICLES = [
       "安防",
       "特殊"
     ],
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "yokee",
@@ -648,7 +644,7 @@ export const CANONICAL_VEHICLES = [
       "观光",
       "载客"
     ],
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "l4-kit",
@@ -697,7 +693,7 @@ export const CANONICAL_VEHICLES = [
       "套件",
       "改装"
     ],
-    "enabled": true
+    "enabled": false
   },
   // ─── Monthly dedicated line vehicles ───
   {
@@ -776,6 +772,6 @@ export const CANONICAL_VEHICLES = [
       "breakdown": [{"label": "月费(含基础次数)", "amount": 6800}]
     },
     "tags": ["包月", "大型"],
-    "enabled": true
+    "enabled": false
   }
 ] as const
