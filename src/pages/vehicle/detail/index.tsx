@@ -153,17 +153,10 @@ const VehicleDetailPage: FC = () => {
       )}
 
       <View className="px-4 py-3">
-        {/* 名称 + 简介（副标题变为简介） + 标签 */}
+        {/* 名称 + 简介 */}
         <View className="mb-4">
           <Text className="block text-xl font-semibold text-slate-800">{vehicle.fullName}</Text>
           <Text className="block text-sm text-slate-500 mt-2 leading-relaxed">{vehicle.subtitle || vehicle.description}</Text>
-          {vehicle.tags.length > 0 && (
-            <View className="flex flex-wrap gap-2 mt-3">
-              {vehicle.tags.map(tag => (
-                <Badge key={tag} variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">{tag}</Badge>
-              ))}
-            </View>
-          )}
         </View>
 
         {/* 核心参数 */}
