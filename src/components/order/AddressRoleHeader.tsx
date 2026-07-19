@@ -20,7 +20,7 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
   if (!enabled) return null
 
   return (
-    <View className="flex items-center justify-center -my-2 relative z-10">
+    <View className="flex items-center justify-center mt-1 relative z-10">
       <View
         style={{
           width: 32,
