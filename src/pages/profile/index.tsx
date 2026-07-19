@@ -1,7 +1,7 @@
 import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { ChevronRight, CircleUser, MapPinHouse, Ticket, Truck } from 'lucide-react-taro'
-import { useState } from 'react'
+import { ChevronRight, CircleCheck, CircleUser, ClipboardCheck, MapPinHouse, Ticket, Truck, Wallet } from 'lucide-react-taro'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -52,17 +52,17 @@ export default function ProfilePage() {
     }
   }
 
-  const statusItems = [
-    { label: '待付款', count: stats?.pendingPayment || 0, tab: 'pending_payment', color: '#F59E0B' },
-    { label: '待审核', count: stats?.pendingReview || 0, tab: 'pending_review', color: '#3B82F6' },
-    { label: '进行中', count: stats?.active || 0, tab: 'active', color: '#10B981' },
-    { label: '已完成', count: stats?.completed || 0, tab: 'completed', color: '#6B7280' },
+  const statusItems: Array<{ label: string; count: number; tab: string; color: string; icon: React.ReactNode }> = [
+    { label: '待付款', count: stats?.pendingPayment || 0, tab: 'pending_payment', color: '#F59E0B', icon: <Wallet size={22} color="#F59E0B" /> },
+    { label: '待审核', count: stats?.pendingReview || 0, tab: 'pending_review', color: '#3B82F6', icon: <ClipboardCheck size={22} color="#3B82F6" /> },
+    { label: '进行中', count: stats?.active || 0, tab: 'active', color: '#10B981', icon: <Truck size={22} color="#10B981" /> },
+    { label: '已完成', count: stats?.completed || 0, tab: 'completed', color: '#6B7280', icon: <CircleCheck size={22} color="#6B7280" /> },
   ]
 
   return (
     <View className="min-h-screen bg-gray-50 pb-20">
       {/* 用户信息 */}
-      <View className="bg-white px-4 pt-12 pb-5">
+      <View className="bg-white px-4 pt-6 pb-5">
         <View className="flex flex-row items-center gap-4" onClick={handleUserClick}>
           <View className="flex h-14 w-14 items-center justify-center rounded-full bg-primary bg-opacity-10">
             <CircleUser size={32} color="var(--primary)" />
@@ -95,16 +95,14 @@ export default function ProfilePage() {
           </View>
           <View className="flex flex-row justify-around">
             {statusItems.map(item => (
-              <View key={item.label} className="flex flex-col items-center gap-1" onClick={() => Taro.navigateTo({ url: `/pages/orders/index?tab=${item.tab}` })}>
-                <View className="relative">
-                  <Truck size={24} color={item.color} />
-                  {item.count > 0 && (
-                    <View style={{ position: 'absolute', top: -6, right: -10, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 10, color: '#fff', lineHeight: '16px' }}>{item.count > 99 ? '99+' : item.count}</Text>
-                    </View>
-                  )}
+              <View key={item.label} className="flex flex-col items-center" onClick={() => Taro.navigateTo({ url: `/pages/orders/index?tab=${item.tab}` })}>
+                <View className="mb-2">
+                  {item.icon}
                 </View>
-                <Text className="block text-xs text-gray-500 mt-1">{item.label}</Text>
+                <Text className="block text-xs text-slate-600 mb-1">{item.label}</Text>
+                {item.count > 0 && (
+                  <Text className="block text-xs font-semibold text-primary">{item.count}</Text>
+                )}
               </View>
             ))}
           </View>
