@@ -14,8 +14,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { AspectRatio } from '@/components/ui/aspect-ratio'
 import {
-  ArrowLeft, Battery, Gauge, Grid3x3, Weight,
+  ArrowLeft, Battery, Gauge, Grid3x3, Weight, Ruler,
   ChevronRight, X, CircleCheck,
 } from 'lucide-react-taro'
 import { fetchVehicle } from '@/services/vehicle-catalog'
@@ -121,8 +122,10 @@ const VehicleDetailPage: FC = () => {
           >
             {images.map((src, idx) => (
               <SwiperItem key={idx}>
-                <View className="w-full h-full" style={{ height: '220px' }} onClick={() => setPreviewIdx(idx)}>
-                  <Image className="w-full h-full" mode="aspectFill" src={src} />
+                <View className="w-full" onClick={() => setPreviewIdx(idx)}>
+                  <AspectRatio ratio={16 / 9}>
+                    <Image className="w-full h-full" mode="aspectFill" src={src} />
+                  </AspectRatio>
                 </View>
               </SwiperItem>
             ))}
@@ -142,8 +145,12 @@ const VehicleDetailPage: FC = () => {
           )}
         </View>
       ) : (
-        <View className="w-full h-48 flex items-center justify-center" style={{ backgroundColor: '#2088D8' }}>
-          <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>
+        <View className="w-full flex items-center justify-center" style={{ backgroundColor: '#2088D8' }}>
+          <AspectRatio ratio={16 / 9}>
+            <View className="w-full h-full flex items-center justify-center">
+              <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>
+            </View>
+          </AspectRatio>
           {vehicle.specs.temperatureRange && (
             <View className="absolute top-3 right-3">
               <Badge className="bg-cyan-500 text-white border-0">冷藏 {vehicle.specs.temperatureRange}</Badge>
@@ -196,16 +203,18 @@ const VehicleDetailPage: FC = () => {
                 </View>
                 <Text className="block text-base font-semibold text-slate-800">{vehicle.specs.speedKmh} km/h</Text>
               </View>
+              {vehicle.specs.cargoDimensionsMm && (
+                <View className="col-span-2 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-3">
+                  <View className="flex items-center gap-2 mb-1">
+                    <Ruler size={14} color="#2088D8" />
+                    <Text className="block text-xs text-slate-500">货箱尺寸(参考)</Text>
+                  </View>
+                  <Text className="block text-base font-semibold text-slate-800">
+                    {vehicle.specs.cargoDimensionsMm.length} × {vehicle.specs.cargoDimensionsMm.width} × {vehicle.specs.cargoDimensionsMm.height} mm
+                  </Text>
+                </View>
+              )}
             </View>
-
-            {vehicle.specs.cargoDimensionsMm && (
-              <View className="mt-3 bg-slate-50 rounded-lg p-3">
-                <Text className="block text-xs text-slate-500 mb-1">货箱尺寸(参考)</Text>
-                <Text className="block text-sm text-slate-700">
-                  {vehicle.specs.cargoDimensionsMm.length} × {vehicle.specs.cargoDimensionsMm.width} × {vehicle.specs.cargoDimensionsMm.height} mm
-                </Text>
-              </View>
-            )}
           </CardContent>
         </Card>
 
