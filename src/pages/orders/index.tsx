@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
-  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+  AlertDialogTitle, AlertDialogDescription,
 } from '@/components/ui/alert-dialog'
 import { Truck, Clock3, CircleCheck, CircleX, Hourglass, Ban, Wallet, Loader, Inbox, Trash2, Check } from 'lucide-react-taro'
 import { consumerRequest } from '@/services/consumer-api'
@@ -150,6 +150,7 @@ export default function OrdersPage() {
   }
 
   const handleDelete = async () => {
+    console.log('[Orders] handleDelete called, selectedIds:', [...selectedIds], 'size:', selectedIds.size, 'deleting:', deleting)
     if (!selectedIds.size || deleting) return
     const ids = [...selectedIds]
     const realIds = ids.filter(id => !id.startsWith('demo-'))
@@ -166,6 +167,7 @@ export default function OrdersPage() {
       removeOrderSnapshots(ids)
       setSelectedIds(new Set())
       setSelecting(false)
+      setDeleteDialogOpen(false)
       Taro.showToast({ title: `已删除${ids.length}个订单`, icon: 'success' })
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
@@ -335,8 +337,12 @@ export default function OrdersPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel><Text className="block text-center">再想想</Text></AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleDelete}><Text className="block text-center">确认删除</Text></AlertDialogAction>
+            <Button variant="outline" className="flex-1" disabled={deleting} onClick={() => setDeleteDialogOpen(false)}>
+              <Text className="block text-center">再想想</Text>
+            </Button>
+            <Button variant="destructive" className="flex-1" disabled={deleting} onClick={handleDelete}>
+              <Text className="block text-center">{deleting ? '删除中…' : '确认删除'}</Text>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
