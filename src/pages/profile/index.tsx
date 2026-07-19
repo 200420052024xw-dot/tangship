@@ -100,9 +100,7 @@ export default function ProfilePage() {
                   {item.icon}
                 </View>
                 <Text className="block text-xs text-slate-600 mb-1">{item.label}</Text>
-                {item.count > 0 && (
-                  <Text className="block text-xs font-semibold text-primary">{item.count}</Text>
-                )}
+                <Text className="block text-xs font-semibold text-slate-800">{item.count}</Text>
               </View>
             ))}
           </View>

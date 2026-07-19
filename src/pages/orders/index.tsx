@@ -76,7 +76,10 @@ function getIconColor(colorClass: string): string {
 }
 
 export default function OrdersPage() {
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = Taro.getCurrentInstance().router?.params
+    return params?.tab || 'all'
+  })
   const { data: orders, loading, refresh } = useSWR<Order[]>(
     'my-orders',
     async () => {
