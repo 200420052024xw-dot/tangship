@@ -127,13 +127,13 @@ const AlertDialogContent = React.forwardRef<
   const state = context?.open ? "open" : "closed"
   return (
     <AlertDialogPortal>
-      <View className="fixed inset-0 z-50">
+      <View className="fixed inset-0 z-[200]">
         <AlertDialogOverlay />
         <View
           ref={ref}
           data-state={state}
           className={cn(
-             "z-50 grid w-[calc(100%-2rem)] max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-xl",
+             "z-[200] grid w-[calc(100%-2rem)] max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-xl",
              className
             )}
           style={{
@@ -216,6 +216,7 @@ const AlertDialogAction = React.forwardRef<
           ref={ref}
           className={cn(buttonVariants({ variant, size }), "min-w-0 flex-1", className)}
           onClick={(e) => {
+                e.stopPropagation()
                 context?.onOpenChange?.(false)
                 onClick?.(e)
             }}
@@ -239,6 +240,7 @@ const AlertDialogCancel = React.forwardRef<
             className
             )}
           onClick={(e) => {
+                e.stopPropagation()
                 context?.onOpenChange?.(false)
                 onClick?.(e)
             }}

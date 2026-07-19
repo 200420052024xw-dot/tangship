@@ -307,7 +307,7 @@ export default function OrdersPage() {
         )}
       </View>
 
-      {selecting && (
+      {selecting && !deleteDialogOpen && (
         <FixedActionBar bottom={50} safeArea={false}>
           <View className="flex w-full flex-row items-center justify-between gap-4">
             <Text className="block min-w-0 flex-1 text-sm text-slate-600">已选择 {selectedIds.size} 个订单</Text>
