@@ -37,9 +37,9 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
       {/* 圆形按钮 - 居中悬浮，白色底遮住虚线 */}
       <View
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
+          width: 22,
+          height: 22,
+          borderRadius: 11,
           backgroundColor: '#FFFFFF',
           borderWidth: 1,
           borderColor: '#CBD5E1',
@@ -52,7 +52,7 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
         className="active:bg-slate-100"
         onClick={onSwap}
       >
-        <ArrowUpDown size={14} color="#64748B" />
+        <ArrowUpDown size={10} color="#94A3B8" />
       </View>
     </View>
   )
