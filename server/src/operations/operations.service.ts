@@ -342,6 +342,19 @@ export class OperationsService implements OnModuleInit {
   }
 
   // ─── Inquiries ───
+  async getInquiryStats() {
+    const client = this.getClient();
+    const { data, error } = await client.from('inquiries').select('status');
+    if (error) throw new Error(`查询咨询统计失败: ${error.message}`);
+    const stats = { pending: 0, contacted: 0, closed: 0 };
+    (data || []).forEach((r: any) => {
+      if (r.status === 'pending') stats.pending++;
+      else if (r.status === 'contacted') stats.contacted++;
+      else if (r.status === 'closed') stats.closed++;
+    });
+    return stats;
+  }
+
   async submitInquiry(data: any) {
     if (!data.type || !['monthly', 'rental'].includes(data.type))
       throw new BadRequestException('咨询类型无效');

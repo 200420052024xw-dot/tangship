@@ -21,6 +21,12 @@ export class OrdersController {
     return { code: 200, msg: 'success', data };
   }
 
+  @Get('stats')
+  async stats(@Req() req: any) {
+    const data = await this.orders.stats(req.user.id);
+    return { code: 200, msg: 'success', data };
+  }
+
   @Get(':id')
   async detail(@Req() req: any, @Param('id') id: string) {
     const data = await this.orders.detail(req.user.id, id);

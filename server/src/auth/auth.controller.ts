@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, UnauthorizedException, UseGuards, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Req, UnauthorizedException, UseGuards, Res } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UserAuthGuard, bearer, issueSession } from './auth';
@@ -65,6 +65,23 @@ export class AuthController {
     const client = this.supabase.getClient();
     const { data: user, error } = await client.from('users').select('id, openid, nickname, avatar_url, status, created_at').eq('id', request.user.id).maybeSingle();
     if (error || !user) throw new UnauthorizedException('用户不存在');
+    const adminAccess = await this.hasAdminAccess(request.user.id);
+    return { code: 200, msg: 'success', data: { ...user, adminAccess } };
+  }
+
+  @Patch('me')
+  @HttpCode(200)
+  @UseGuards(UserAuthGuard)
+  async updateMe(@Req() request: any, @Body() body: { nickname?: string }) {
+    const client = this.supabase.getClient();
+    const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (body.nickname !== undefined) {
+      const nick = String(body.nickname).trim();
+      if (!nick || nick.length > 32) throw new UnauthorizedException('昵称长度1-32');
+      updates.nickname = nick;
+    }
+    const { data: user, error } = await client.from('users').update(updates).eq('id', request.user.id).select('id, openid, nickname, avatar_url, status').maybeSingle();
+    if (error || !user) throw new UnauthorizedException('更新失败');
     const adminAccess = await this.hasAdminAccess(request.user.id);
     return { code: 200, msg: 'success', data: { ...user, adminAccess } };
   }

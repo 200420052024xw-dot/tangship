@@ -90,6 +90,25 @@ export class OrdersService {
     return this.detail(userId, id);
   }
 
+  async stats(userId: string) {
+    const client = this.getClient();
+    const [pendingPayment, active, completed, inquiries] = await Promise.all([
+      client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'pending_payment'),
+      client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).in('status', ['paid', 'dispatching', 'delivering']),
+      client.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'completed'),
+      client.from('inquiries').select('id', { count: 'exact', head: true }).eq('contact_name', userId).eq('status', 'pending'),
+    ]);
+    const { data: totalRow } = await client.from('orders').select('total_fee').eq('user_id', userId).eq('status', 'completed');
+    const totalSpent = (totalRow || []).reduce((sum, r) => sum + (Number(r.total_fee) || 0), 0);
+    return {
+      pendingPayment: pendingPayment.count || 0,
+      pendingReview: inquiries.count || 0,
+      active: active.count || 0,
+      completed: completed.count || 0,
+      totalSpent,
+    };
+  }
+
   async list(userId: string) {
     const cacheKey = CACHE_KEYS.ORDERS_PREFIX + userId;
     const cached = serverCache.get<any[]>(cacheKey);

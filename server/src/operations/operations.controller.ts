@@ -24,6 +24,7 @@ export class PublicContentController {
   }
   @Get('contact') async contact() { return { code: 200, msg: 'success', data: await this.service.getContactSettings() }; }
   @Post('inquiries') async submitInquiry(@Body() body: any) { return { code: 200, msg: '提交成功', data: await this.service.submitInquiry(body) }; }
+  @Get('inquiries/stats') async inquiryStats() { return { code: 200, msg: 'success', data: await this.service.getInquiryStats() }; }
 }
 
 @Controller('admin/operations')
