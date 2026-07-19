@@ -285,7 +285,6 @@ const OrderCreatePage: FC = () => {
           </View>
 
           {/* 交换按钮 — 居中于两个地址之间 */}
-          <View className="py-2">
             <AddressRoleHeader
               enabled={Boolean(draft.senderAddress && draft.receiverAddress)}
               onSwap={() => {
@@ -293,7 +292,6 @@ const OrderCreatePage: FC = () => {
                 Taro.showToast({ title: '已交换', icon: 'none' })
               }}
             />
-          </View>
 
           <View id={SECTION_IDS.receiver}>
             <AddressCard

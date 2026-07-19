@@ -40,7 +40,7 @@ export const AddressCard: FC<Props> = ({ role, address, onTap, onEdit, highlight
   const meta = ROLE_META[role]
   return (
     <View
-      className={`bg-white rounded-xl px-4 py-3 ${highlight ? 'ring-2 ring-blue-500' : ''}`}
+      className={`bg-white rounded-xl px-4 py-2 ${highlight ? 'ring-2 ring-blue-500' : ''}`}
       onClick={onTap}
     >
       {/* 顶部：角色标签 + 编辑 */}

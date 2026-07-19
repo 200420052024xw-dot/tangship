@@ -1,7 +1,7 @@
 /**
  * 地址交换按钮 — 寄件/收件之间，实线水平穿过按钮正中间
  *
- * - 正常文档流，高度 24px，实线始终贯穿
+ * - 正常文档流，实线始终贯穿
  * - 方形按钮居中悬浮在线上（enabled=false 时灰掉不可点）
  */
 
@@ -19,7 +19,7 @@ export const AddressRoleHeader: FC<Props> = ({ enabled, onSwap }) => {
   return (
     <View
       className="relative flex items-center justify-center"
-      style={{ height: 24, zIndex: 1 }}
+      style={{ height: 16, zIndex: 1 }}
     >
       {/* 实线 - 始终贯穿整行 */}
       <View
