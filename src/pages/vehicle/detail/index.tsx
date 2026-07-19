@@ -1,14 +1,12 @@
 /**
  * 车型详情页
  *
- * 路由参数(只用于查找本地常量,不可作为价格/参数来源):
+ * 路由参数:
  * - vehicleId: 必填
  * - mode: 'single' | 'monthly' | 'rental' | 'purchase'
- *
- * ⚠️ URL 中传入的 vehicleId 只用于查表,不信任任何其他字段
  */
 
-import { Image, View, Text } from '@tarojs/components'
+import { Image, View, Text, Swiper, SwiperItem } from '@tarojs/components'
 import { useState, useEffect } from 'react'
 import type { FC } from 'react'
 import Taro from '@tarojs/taro'
@@ -17,8 +15,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
-  ArrowLeft, Battery, Gauge, Grid3x3, Weight, Truck,
-  Snowflake, CircleCheck, TriangleAlert, Clock, ChevronRight,
+  ArrowLeft, Battery, Gauge, Grid3x3, Weight,
+  ChevronRight, X, CircleCheck,
 } from 'lucide-react-taro'
 import { fetchVehicle } from '@/services/vehicle-catalog'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -38,6 +36,8 @@ const VehicleDetailPage: FC = () => {
 
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [currentImg, setCurrentImg] = useState(0)
+  const [previewIdx, setPreviewIdx] = useState(-1) // -1 = 未预览
 
   useEffect(() => {
     setLoaded(false)
@@ -49,7 +49,6 @@ const VehicleDetailPage: FC = () => {
 
   const handleBack = () => Taro.navigateBack()
 
-  /** 路由 fallback:无效车型或参数错误 */
   if (!vehicle) {
     return (
       <View className="min-h-screen bg-slate-50 flex flex-col">
@@ -62,16 +61,9 @@ const VehicleDetailPage: FC = () => {
           </View>
         </View>
         <View className="flex-1 flex flex-col items-center justify-center px-6">
-          <TriangleAlert size={48} color="#94A3B8" />
-          <Text className="block text-base text-slate-700 mt-4 font-medium">{loaded ? '未找到该车型' : '正在加载车型…'}</Text>
-          <Text className="block text-sm text-slate-400 mt-2 text-center">
-            {loaded ? '车型已下线或链接失效,请返回首页重新选择' : '正在读取后台车型配置'}
-          </Text>
-          <Button
-            className="mt-6 w-full max-w-sm h-11 bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={handleBack}
-          >
-            <Text className="block">返回上一页</Text>
+          <Text className="block text-base text-slate-700 mt-4 font-medium">{loaded ? '未找到该车型' : '正在加载…'}</Text>
+          <Button className="mt-6 w-full max-w-sm h-11 bg-blue-600 text-white" onClick={handleBack}>
+            <Text className="block">返回</Text>
           </Button>
         </View>
       </View>
@@ -83,25 +75,24 @@ const VehicleDetailPage: FC = () => {
 
   const handlePrimaryAction = () => {
     if (!modeSupported) {
-      Taro.showToast({ title: '该车型不支持当前业务模式，请返回重新选择', icon: 'none' })
+      Taro.showToast({ title: '该车型不支持当前业务模式', icon: 'none' })
       return
     }
     if (activeMode === 'single') {
-      // 按趟结算: 创建草稿,进入下单流程
       const store = useOrderDraftStore.getState()
       store.initDraft('single', vehicle.id)
       Taro.navigateTo({ url: '/pages/order/create/index?mode=single' })
     } else if (activeMode === 'monthly') {
-      // 包月专线: 先填信息再选车,这里已选车,进入包月信息填写页
       Taro.navigateTo({ url: `/pages/inquiry/monthly/index?vehicleId=${vehicle.id}` })
     } else {
-      // 租购服务: 先填信息再选车,这里已选车,进入租购信息填写页
       Taro.navigateTo({ url: `/pages/inquiry/rental/index?vehicleId=${vehicle.id}` })
     }
   }
 
   const primaryLabel = modeSupported ? MODE_BUTTON_LABEL[activeMode] : '重新选择业务模式'
   const startFrom = vehicle.pricingDescription.startFrom
+  const images = vehicle.images?.length ? vehicle.images : []
+  const includedKm = (vehicle.pricingDescription as any).includedKm
 
   return (
     <View className="min-h-screen bg-slate-50 pb-24">
@@ -115,29 +106,61 @@ const VehicleDetailPage: FC = () => {
         </View>
       </View>
 
-      {/* 主图(占位) */}
-      <View className="w-full h-48 relative overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#2088D8' }}>
-        {vehicle.images?.[0] ? <Image className="w-full h-full" mode="aspectFill" src={vehicle.images[0]} /> : <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>}
-        {vehicle.specs.temperatureRange && (
-          <View className="absolute top-3 right-3">
-            <Badge className="bg-cyan-500 text-white border-0">
-              冷藏 {vehicle.specs.temperatureRange}
-            </Badge>
-          </View>
-        )}
-      </View>
+      {/* 图片轮播 */}
+      {images.length > 0 ? (
+        <View className="w-full relative">
+          <Swiper
+            className="w-full"
+            style={{ height: '220px' }}
+            indicatorDots={images.length > 1}
+            indicatorColor="rgba(255,255,255,0.4)"
+            indicatorActiveColor="#fff"
+            autoplay={false}
+            circular={images.length > 1}
+            onChange={(e) => setCurrentImg(e.detail.current)}
+          >
+            {images.map((src, idx) => (
+              <SwiperItem key={idx}>
+                <View className="w-full h-full" style={{ height: '220px' }} onClick={() => setPreviewIdx(idx)}>
+                  <Image className="w-full h-full" mode="aspectFill" src={src} />
+                </View>
+              </SwiperItem>
+            ))}
+          </Swiper>
+          {/* 指示器（自定义） */}
+          {images.length > 1 && (
+            <View className="absolute bottom-2 right-3 bg-black rounded-full px-2 py-1" style={{ opacity: 0.6 }}>
+              <Text className="block text-xs text-white">{currentImg + 1}/{images.length}</Text>
+            </View>
+          )}
+          {vehicle.specs.temperatureRange && (
+            <View className="absolute top-3 right-3">
+              <Badge className="bg-cyan-500 text-white border-0">
+                冷藏 {vehicle.specs.temperatureRange}
+              </Badge>
+            </View>
+          )}
+        </View>
+      ) : (
+        <View className="w-full h-48 flex items-center justify-center" style={{ backgroundColor: '#2088D8' }}>
+          <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>
+          {vehicle.specs.temperatureRange && (
+            <View className="absolute top-3 right-3">
+              <Badge className="bg-cyan-500 text-white border-0">冷藏 {vehicle.specs.temperatureRange}</Badge>
+            </View>
+          )}
+        </View>
+      )}
 
       <View className="px-4 py-3">
-        {/* 名称 + 副标题 + 标签 */}
+        {/* 名称 + 简介（副标题变为简介） + 标签 */}
         <View className="mb-4">
           <Text className="block text-xl font-semibold text-slate-800">{vehicle.fullName}</Text>
-          <Text className="block text-sm text-slate-500 mt-1">{vehicle.subtitle}</Text>
+          <Text className="block text-sm text-slate-500 mt-2 leading-relaxed">{vehicle.subtitle || vehicle.description}</Text>
           {vehicle.tags.length > 0 && (
             <View className="flex flex-wrap gap-2 mt-3">
               {vehicle.tags.map(tag => (
-                <Badge key={tag} variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">
-                  {tag}
-                </Badge>
+                <Badge key={tag} variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">{tag}</Badge>
               ))}
             </View>
           )}
@@ -162,9 +185,7 @@ const VehicleDetailPage: FC = () => {
                   <Grid3x3 size={14} color="#2088D8" />
                   <Text className="block text-xs text-slate-500">货厢容积</Text>
                 </View>
-                <Text className="block text-base font-semibold text-slate-800">
-                  {vehicle.specs.cargoVolume}
-                </Text>
+                <Text className="block text-base font-semibold text-slate-800">{vehicle.specs.cargoVolume}</Text>
               </View>
               <View className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-3">
                 <View className="flex items-center gap-2 mb-1">
@@ -180,18 +201,7 @@ const VehicleDetailPage: FC = () => {
                   <Gauge size={14} color="#2088D8" />
                   <Text className="block text-xs text-slate-500">运行时速</Text>
                 </View>
-                <Text className="block text-base font-semibold text-slate-800">
-                  {vehicle.specs.speedKmh} km/h
-                </Text>
-              </View>
-              <View className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-3 col-span-2">
-                <View className="flex items-center gap-2 mb-1">
-                  <Clock size={14} color="#2088D8" />
-                  <Text className="block text-xs text-slate-500">充电时长</Text>
-                </View>
-                <Text className="block text-base font-semibold text-slate-800">
-                  {vehicle.specs.chargeTime}
-                </Text>
+                <Text className="block text-base font-semibold text-slate-800">{vehicle.specs.speedKmh} km/h</Text>
               </View>
             </View>
 
@@ -203,14 +213,6 @@ const VehicleDetailPage: FC = () => {
                 </Text>
               </View>
             )}
-          </CardContent>
-        </Card>
-
-        {/* 简介 */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <Text className="block text-base font-semibold text-slate-800 mb-2">车型简介</Text>
-            <Text className="block text-sm text-slate-600 leading-relaxed">{vehicle.description}</Text>
           </CardContent>
         </Card>
 
@@ -229,76 +231,11 @@ const VehicleDetailPage: FC = () => {
           </CardContent>
         </Card>
 
-        {/* 使用限制 / 禁运提示 */}
-        <Card className="mb-4 border-amber-100">
-          <CardContent className="p-4">
-            <View className="flex items-center gap-2 mb-3">
-              <TriangleAlert size={16} color="#F59E0B" />
-              <Text className="block text-base font-semibold text-slate-800">使用限制 / 禁运提示</Text>
-            </View>
-            <View className="space-y-2">
-              {vehicle.restrictions.map((r, idx) => (
-                <View key={idx} className="flex items-start gap-2">
-                  <Text className="block text-sm text-slate-500">·</Text>
-                  <Text className="block text-sm text-slate-700 flex-1">{r}</Text>
-                </View>
-              ))}
-            </View>
-            {vehicle.requiresApproval && (
-              <View className="mt-3 bg-amber-50 rounded-lg p-3">
-                <Text className="block text-xs text-amber-700">
-                  该车型需提前预约冷链资质,具体请联系客服
-                </Text>
-              </View>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 服务说明 */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <View className="flex items-center gap-2 mb-3">
-              <Truck size={16} color="#2088D8" />
-              <Text className="block text-base font-semibold text-slate-800">服务说明</Text>
-            </View>
-            <View className="space-y-2">
-              <View className="flex items-start gap-2">
-                <Text className="block text-sm text-slate-500">·</Text>
-                <Text className="block text-sm text-slate-700 flex-1">
-                  服务范围:支持城区与园区内的货物配送
-                </Text>
-              </View>
-              <View className="flex items-start gap-2">
-                <Text className="block text-sm text-slate-500">·</Text>
-                <Text className="block text-sm text-slate-700 flex-1">
-                  计费方式:按服务模式与实际路线核验后报价
-                </Text>
-              </View>
-              <View className="flex items-start gap-2">
-                <Text className="block text-sm text-slate-500">·</Text>
-                <Text className="block text-sm text-slate-700 flex-1">
-                  装卸要求:装卸点需具备车辆可达的物理条件
-                </Text>
-              </View>
-              {vehicle.specs.temperatureRange && (
-                <View className="flex items-start gap-2">
-                  <Snowflake size={14} color="#06B6D4" className="mt-1" />
-                  <Text className="block text-sm text-slate-700 flex-1">
-                    温控区间:{vehicle.specs.temperatureRange}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </CardContent>
-        </Card>
-
-        {/* 价格说明(非最终成交价) */}
+        {/* 价格说明 */}
         <Card className="mb-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100">
           <CardContent className="p-4">
             <Text className="block text-base font-semibold text-slate-800 mb-2">价格说明</Text>
-            <Text className="block text-sm text-slate-700 mb-3">
-              {vehicle.pricingDescription.description}
-            </Text>
+            <Text className="block text-sm text-slate-700 mb-3">{vehicle.pricingDescription.description}</Text>
             {vehicle.pricingDescription.breakdown && (
               <View className="bg-white rounded-lg p-3">
                 {vehicle.pricingDescription.breakdown.map((b, idx) => (
@@ -320,33 +257,52 @@ const VehicleDetailPage: FC = () => {
                 <Text className="block text-lg font-bold text-blue-600">¥{startFrom}</Text>
               </View>
             )}
+            {includedKm !== undefined && includedKm > 0 && (
+              <View className="mt-2 flex items-center justify-between">
+                <Text className="block text-sm text-slate-500">包含公里数</Text>
+                <Text className="block text-base font-medium text-slate-800">{includedKm} km</Text>
+              </View>
+            )}
             <Text className="block text-xs text-amber-700 mt-3">
-              ⚠️ 此为起步参考价,最终费用由服务端根据实际路线核验后给出
+              ⚠️ 此为起步参考价，最终费用由服务端根据实际路线核验后给出
             </Text>
           </CardContent>
         </Card>
-
-        {/* 常见问题 */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <Text className="block text-base font-semibold text-slate-800 mb-3">常见问题</Text>
-            <View className="space-y-3">
-              <View>
-                <Text className="block text-sm font-medium text-slate-700 mb-1">Q:可以跨城配送吗?</Text>
-                <Text className="block text-xs text-slate-500">A:支持城区与园区内的货物配送,跨城需求请联系客服。</Text>
-              </View>
-              <View>
-                <Text className="block text-sm font-medium text-slate-700 mb-1">Q:如何确认可用时间?</Text>
-                <Text className="block text-xs text-slate-500">A:最终可用时间由服务端结合运力核验后确认。</Text>
-              </View>
-              <View>
-                <Text className="block text-sm font-medium text-slate-700 mb-1">Q:可以指定路线吗?</Text>
-                <Text className="block text-xs text-slate-500">A:可以,需在备注中说明,实际通行以服务端评估为准。</Text>
-              </View>
-            </View>
-          </CardContent>
-        </Card>
       </View>
+
+      {/* 图片预览弹窗 */}
+      {previewIdx >= 0 && (
+        <View
+          className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}
+          onClick={() => setPreviewIdx(-1)}
+        >
+          <View className="absolute top-4 right-4 z-10" onClick={(e) => { e.stopPropagation(); setPreviewIdx(-1) }}>
+            <X size={24} color="#fff" />
+          </View>
+          {images[previewIdx] && (
+            <Image
+              className="w-full max-h-full"
+              mode="aspectFit"
+              src={images[previewIdx]}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <View className="absolute bottom-8 flex items-center gap-4">
+            {previewIdx > 0 && (
+              <View className="bg-white rounded-full p-2" style={{ opacity: 0.2 }} onClick={(e) => { e.stopPropagation(); setPreviewIdx(previewIdx - 1) }}>
+                <ArrowLeft size={20} color="#fff" />
+              </View>
+            )}
+            <Text className="block text-sm text-white">{previewIdx + 1} / {images.length}</Text>
+            {previewIdx < images.length - 1 && (
+              <View className="bg-white rounded-full p-2" style={{ opacity: 0.2 }} onClick={(e) => { e.stopPropagation(); setPreviewIdx(previewIdx + 1) }}>
+                <ChevronRight size={20} color="#fff" />
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* 底部固定操作栏 */}
       <View
@@ -365,9 +321,7 @@ const VehicleDetailPage: FC = () => {
         <View className="flex items-center gap-3">
           <View className="flex-1">
             {startFrom !== undefined && (
-              <Text className="block text-xs text-slate-500">
-                起步 ¥{startFrom}
-              </Text>
+              <Text className="block text-xs text-slate-500">起步 ¥{startFrom}</Text>
             )}
             <Text className="block text-sm font-medium text-slate-800">
               {activeMode === 'single' ? '按趟结算' : activeMode === 'monthly' ? '包月专线' : '租购咨询'}

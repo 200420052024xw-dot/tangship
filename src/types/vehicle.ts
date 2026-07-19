@@ -25,6 +25,8 @@ export interface VehiclePriceHint {
    * 价格构成明细(单位:元)。前端展示费用说明时使用,不参与计算。
    */
   breakdown?: Array<{ label: string; amount: number | string }>
+  /** 起步价包含的公里数，管理端可编辑 */
+  includedKm?: number
 }
 
 export interface VehicleSpec {
