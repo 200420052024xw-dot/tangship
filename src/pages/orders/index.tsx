@@ -189,11 +189,12 @@ export default function OrdersPage() {
         const sender = order.addresses?.find(a => a.role === 'sender')
         const receiver = order.addresses?.find(a => a.role === 'receiver')
         const itemSummary = order.items?.length ? `${order.items[0].name}等${order.items.reduce((s, i) => s + i.quantity, 0)}件` : ''
+        const isSelected = selectedIds.has(order.id)
         return (
-          <Card
+          <View
             key={order.id}
-            className={selecting && selectedIds.has(order.id) ? 'border-primary bg-blue-50' : ''}
             onClick={() => {
+              console.log('[Orders] card click', order.id, 'selecting=', selecting)
               if (selecting) {
                 toggleSelected(order.id)
               } else {
@@ -202,6 +203,9 @@ export default function OrdersPage() {
                   .catch(() => Taro.showToast({ title: '打开失败', icon: 'none' }))
               }
             }}
+          >
+          <Card
+            className={selecting && isSelected ? 'border-primary bg-blue-50' : ''}
           >
             <CardContent className="p-4">
               {/* 第一行：车型名 + 状态标签 */}
@@ -250,6 +254,7 @@ export default function OrdersPage() {
               </View>
             </CardContent>
           </Card>
+          </View>
         )
       })}
     </View>
