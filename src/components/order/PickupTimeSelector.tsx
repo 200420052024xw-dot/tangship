@@ -2,16 +2,17 @@
  * 用车时间选择
  *
  * - 立即用车 / 预约用车
- * - 预约用车：选择日期（今天/明天/后天）+ 选择时间段（每半小时一个时段）
- * - 用户选择，不让用户填写
+ * - 预约用车：点击后底部 Drawer 弹窗选择日期+时段，确认后显示已选时间
  */
 
 import { View, Text } from '@tarojs/components'
-import { useEffect, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Clock, Zap, Calendar } from 'lucide-react-taro'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/drawer'
+import { Button } from '@/components/ui/button'
+import { Clock, Zap, Calendar, ChevronDown } from 'lucide-react-taro'
 import type { PickupType, TimeSlot } from '@/types/order'
 
 /**
@@ -47,8 +48,8 @@ function toHHmm(h: number, m: number): string {
 }
 
 /** 获取可预约日期列表 */
-function getBookableDates(): { label: string; value: string }[] {
-  const result: { label: string; value: string }[] = []
+function getBookableDates(): { label: string; shortLabel: string; value: string }[] {
+  const result: { label: string; shortLabel: string; value: string }[] = []
   const now = new Date()
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -56,14 +57,14 @@ function getBookableDates(): { label: string; value: string }[] {
     const d = new Date(now)
     d.setDate(d.getDate() + i)
     const dateStr = toLocalISO(d)
-    let label: string
-    if (i === 0) label = '今天'
-    else if (i === 1) label = '明天'
-    else if (i === 2) label = '后天'
-    else label = weekDays[d.getDay()]
+    let shortLabel: string
+    if (i === 0) shortLabel = '今天'
+    else if (i === 1) shortLabel = '明天'
+    else if (i === 2) shortLabel = '后天'
+    else shortLabel = weekDays[d.getDay()]
 
-    label += ` ${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
-    result.push({ label, value: dateStr })
+    const label = `${shortLabel} ${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+    result.push({ label, shortLabel, value: dateStr })
   }
   return result
 }
@@ -96,106 +97,154 @@ function getHalfHourSlots(dateStr: string): { label: string; start: string; end:
   return slots
 }
 
+/** 格式化已选时间显示 */
+function formatScheduledDisplay(slot: TimeSlot, dates: { shortLabel: string; value: string }[]): string {
+  const dateItem = dates.find(d => d.value === slot.date)
+  const dateLabel = dateItem?.shortLabel || slot.date
+  return `${dateLabel} ${slot.startTime}-${slot.endTime}`
+}
+
 export const PickupTimeSelector: FC<Props> = ({
   pickupType,
   scheduledSlot,
   onPickupTypeChange,
   onScheduledSlotChange,
 }) => {
-  const bookableDates = useMemo(() => getBookableDates(), [])
-  const timeSlots = useMemo(
-    () => getHalfHourSlots(scheduledSlot?.date || bookableDates[0]?.value || ''),
-    [scheduledSlot?.date, bookableDates],
-  )
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  // Drawer 内临时选中的值
+  const [tempDate, setTempDate] = useState<string>('')
+  const [tempSlot, setTempSlot] = useState<{ start: string; end: string } | null>(null)
 
-  // 预约用车：初始化默认值
-  useEffect(() => {
-    if (pickupType !== 'scheduled') return
-    if (scheduledSlot) return
-    const defaultDate = bookableDates[0]?.value
-    if (!defaultDate) return
-    const defaultSlot = getHalfHourSlots(defaultDate)[0]
-    if (defaultSlot) {
+  const bookableDates = useMemo(() => getBookableDates(), [])
+
+  const handlePickupTypeChange = (type: PickupType) => {
+    onPickupTypeChange(type)
+    if (type === 'scheduled' && !scheduledSlot) {
+      // 打开 Drawer 让用户选择
+      const defaultDate = bookableDates[0]?.value || ''
+      setTempDate(defaultDate)
+      setTempSlot(getHalfHourSlots(defaultDate)[0] || null)
+      setDrawerOpen(true)
+    }
+  }
+
+  const handleDrawerConfirm = () => {
+    if (tempDate && tempSlot) {
       onScheduledSlotChange({
-        date: defaultDate,
-        startTime: defaultSlot.start,
-        endTime: defaultSlot.end,
+        date: tempDate,
+        startTime: tempSlot.start,
+        endTime: tempSlot.end,
       })
     }
-  }, [pickupType, scheduledSlot, onPickupTypeChange, bookableDates])
+    setDrawerOpen(false)
+  }
+
+  const handleReschedule = () => {
+    setTempDate(scheduledSlot?.date || bookableDates[0]?.value || '')
+    setTempSlot(
+      scheduledSlot
+        ? { start: scheduledSlot.startTime, end: scheduledSlot.endTime }
+        : null
+    )
+    setDrawerOpen(true)
+  }
 
   const handleDateSelect = (dateValue: string) => {
+    setTempDate(dateValue)
     const firstSlot = getHalfHourSlots(dateValue)[0]
-    onScheduledSlotChange({
-      date: dateValue,
-      startTime: firstSlot?.start || '08:00',
-      endTime: firstSlot?.end || '08:30',
-    })
+    setTempSlot(firstSlot || null)
   }
 
-  const handleSlotSelect = (slot: { start: string; end: string }) => {
-    if (!scheduledSlot) return
-    onScheduledSlotChange({
-      ...scheduledSlot,
-      startTime: slot.start,
-      endTime: slot.end,
-    })
-  }
+  // Drawer 内时段列表基于临时日期
+  const drawerSlots = useMemo(
+    () => getHalfHourSlots(tempDate),
+    [tempDate],
+  )
 
-  /** 当前选中的时段key */
-  const selectedSlotKey = scheduledSlot
-    ? `${scheduledSlot.startTime}-${scheduledSlot.endTime}`
-    : ''
+  const tempSlotKey = tempSlot ? `${tempSlot.start}-${tempSlot.end}` : ''
 
   return (
-    <Card className="mb-3">
-      <CardContent className="p-4 space-y-4">
-        <View className="flex items-center gap-2">
-          <Clock size={16} color="#2088D8" />
-          <Text className="block text-base font-semibold text-slate-800">用车时间</Text>
-        </View>
-
-        {/* 类型选择 */}
-        <ToggleGroup
-          type="single"
-          value={pickupType}
-          onValueChange={(v) => {
-            if (v && typeof v === 'string') onPickupTypeChange(v as PickupType)
-          }}
-          className="flex gap-2"
-        >
-          <ToggleGroupItem value="immediate" className="flex-1 rounded-lg px-3 py-2 text-sm">
-            <View className="flex items-center gap-2">
-              <Zap size={14} color="#2088D8" />
-              <Text className="block">立即用车</Text>
-            </View>
-          </ToggleGroupItem>
-          <ToggleGroupItem value="scheduled" className="flex-1 rounded-lg px-3 py-2 text-sm">
-            <View className="flex items-center gap-2">
-              <Calendar size={14} color="#2088D8" />
-              <Text className="block">预约用车</Text>
-            </View>
-          </ToggleGroupItem>
-        </ToggleGroup>
-
-        {/* 立即用车提示 */}
-        {pickupType === 'immediate' && (
-          <View className="bg-blue-50 rounded-lg p-3">
-            <Text className="block text-sm text-blue-700">
-              立即用车：服务端将在约 {PREP_MINUTES.immediate} 分钟内确认可用时间
-            </Text>
+    <>
+      <Card className="mb-3">
+        <CardContent className="p-4 space-y-3">
+          <View className="flex items-center gap-2">
+            <Clock size={16} color="#2088D8" />
+            <Text className="block text-base font-semibold text-slate-800">用车时间</Text>
           </View>
-        )}
 
-        {/* 预约用车 */}
-        {pickupType === 'scheduled' && (
-          <View className="space-y-3">
+          {/* 类型选择 */}
+          <ToggleGroup
+            type="single"
+            value={pickupType}
+            onValueChange={(v) => {
+              if (v && typeof v === 'string') handlePickupTypeChange(v as PickupType)
+            }}
+            className="flex gap-2"
+          >
+            <ToggleGroupItem value="immediate" className="flex-1 rounded-lg px-3 py-2 text-sm">
+              <View className="flex items-center gap-2">
+                <Zap size={14} color="#2088D8" />
+                <Text className="block">立即用车</Text>
+              </View>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="scheduled" className="flex-1 rounded-lg px-3 py-2 text-sm">
+              <View className="flex items-center gap-2">
+                <Calendar size={14} color="#2088D8" />
+                <Text className="block">预约用车</Text>
+              </View>
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          {/* 立即用车提示 */}
+          {pickupType === 'immediate' && (
+            <View className="bg-blue-50 rounded-lg p-3">
+              <Text className="block text-sm text-blue-700">
+                立即用车：约 {PREP_MINUTES.immediate} 分钟内确认可用时间
+              </Text>
+            </View>
+          )}
+
+          {/* 预约用车 — 已选时间展示 */}
+          {pickupType === 'scheduled' && scheduledSlot && (
+            <View
+              className="bg-blue-50 rounded-lg p-3 flex items-center justify-between"
+              onClick={handleReschedule}
+            >
+              <View className="flex items-center gap-2">
+                <Calendar size={16} color="#2088D8" />
+                <Text className="block text-sm text-blue-700 font-medium">
+                  {formatScheduledDisplay(scheduledSlot, bookableDates)}
+                </Text>
+              </View>
+              <ChevronDown size={16} color="#2088D8" />
+            </View>
+          )}
+
+          {pickupType === 'scheduled' && !scheduledSlot && (
+            <View
+              className="bg-slate-50 rounded-lg p-3 flex items-center justify-center"
+              onClick={handleReschedule}
+            >
+              <Text className="block text-sm text-slate-500">点击选择预约时间</Text>
+            </View>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 底部弹窗选择日期+时段 */}
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>选择预约时间</DrawerTitle>
+          </DrawerHeader>
+
+          <View className="px-4 pb-4 space-y-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
             {/* 日期选择 */}
             <View>
               <Text className="block text-sm font-medium text-slate-700 mb-2">选择日期</Text>
               <View className="flex gap-2">
                 {bookableDates.map(d => {
-                  const isSelected = scheduledSlot?.date === d.value
+                  const isSelected = tempDate === d.value
                   return (
                     <View
                       key={d.value}
@@ -214,20 +263,20 @@ export const PickupTimeSelector: FC<Props> = ({
             {/* 时间段选择 */}
             <View>
               <Text className="block text-sm font-medium text-slate-700 mb-2">选择时段</Text>
-              {timeSlots.length === 0 ? (
+              {drawerSlots.length === 0 ? (
                 <View className="bg-slate-50 rounded-lg p-3">
                   <Text className="block text-sm text-slate-500">当天可预约时段已满，请选择其他日期</Text>
                 </View>
               ) : (
                 <View className="grid grid-cols-3 gap-2">
-                  {timeSlots.map(slot => {
+                  {drawerSlots.map(slot => {
                     const key = `${slot.start}-${slot.end}`
-                    const isSelected = key === selectedSlotKey
+                    const isSelected = key === tempSlotKey
                     return (
                       <View
                         key={key}
                         className={`rounded-lg py-2 px-1 text-center ${isSelected ? 'bg-blue-500' : 'bg-slate-50 active:bg-blue-50'}`}
-                        onClick={() => handleSlotSelect(slot)}
+                        onClick={() => setTempSlot(slot)}
                       >
                         <Text className={`block text-xs ${isSelected ? 'text-white font-medium' : 'text-slate-700'}`}>
                           {slot.label}
@@ -238,15 +287,19 @@ export const PickupTimeSelector: FC<Props> = ({
                 </View>
               )}
             </View>
-
-            <View className="bg-amber-50 rounded-lg p-3">
-              <Text className="block text-xs text-amber-700">
-                预约时段需至少提前 {PREP_MINUTES.scheduled} 分钟；最终可用时间以后端确认结果为准
-              </Text>
-            </View>
           </View>
-        )}
-      </CardContent>
-    </Card>
+
+          <DrawerFooter>
+            <Button
+              className="w-full"
+              disabled={!tempDate || !tempSlot}
+              onClick={handleDrawerConfirm}
+            >
+              <Text className="text-white">确认预约</Text>
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
   )
 }
