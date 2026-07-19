@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { AspectRatio } from '@/components/ui/aspect-ratio'
 import {
   ArrowLeft, Battery, Gauge, Grid3x3, Weight, Ruler,
   ChevronRight, X, CircleCheck,
@@ -109,10 +108,10 @@ const VehicleDetailPage: FC = () => {
 
       {/* 图片轮播 */}
       {images.length > 0 ? (
-        <View className="w-full relative">
+        <View className="w-full">
           <Swiper
             className="w-full"
-            style={{ height: '220px' }}
+            style={{ height: '200px' }}
             indicatorDots={images.length > 1}
             indicatorColor="rgba(255,255,255,0.4)"
             indicatorActiveColor="#fff"
@@ -122,10 +121,8 @@ const VehicleDetailPage: FC = () => {
           >
             {images.map((src, idx) => (
               <SwiperItem key={idx}>
-                <View className="w-full" onClick={() => setPreviewIdx(idx)}>
-                  <AspectRatio ratio={16 / 9}>
-                    <Image className="w-full h-full" mode="aspectFill" src={src} />
-                  </AspectRatio>
+                <View className="w-full h-full" onClick={() => setPreviewIdx(idx)}>
+                  <Image className="w-full h-full" mode="aspectFill" src={src} />
                 </View>
               </SwiperItem>
             ))}
@@ -145,12 +142,8 @@ const VehicleDetailPage: FC = () => {
           )}
         </View>
       ) : (
-        <View className="w-full flex items-center justify-center" style={{ backgroundColor: '#2088D8' }}>
-          <AspectRatio ratio={16 / 9}>
-            <View className="w-full h-full flex items-center justify-center">
-              <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>
-            </View>
-          </AspectRatio>
+        <View className="w-full flex items-center justify-center" style={{ backgroundColor: '#2088D8', height: '200px' }}>
+          <Text className="block text-white text-2xl font-bold">{vehicle.name}</Text>
           {vehicle.specs.temperatureRange && (
             <View className="absolute top-3 right-3">
               <Badge className="bg-cyan-500 text-white border-0">冷藏 {vehicle.specs.temperatureRange}</Badge>
