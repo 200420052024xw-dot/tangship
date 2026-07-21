@@ -76,7 +76,7 @@ export const useDataCache = create<DataCacheStore>((set, get) => ({
     }
   },
 
-  isStale: (key: string, category: CacheCategory) => {
+  isStale: (key: string, category: CacheCategory): boolean => {
     const entry = get().entries[key]
     if (!entry) return true
     return Date.now() - entry.updatedAt > CACHE_CONFIGS[category].staleTime
@@ -122,6 +122,8 @@ export function useSWR<T>(
   const fetcherRef = useRef(fetcher)
   fetcherRef.current = fetcher
   const mountedRef = useRef(true)
+  // 追踪当前 key，防止旧请求的回调覆盖新 key 的数据
+  const currentKeyRef = useRef<string | null>(key)
 
   useEffect(() => {
     mountedRef.current = true
@@ -137,6 +139,8 @@ export function useSWR<T>(
     if (mountedRef.current) setError(null)
     try {
       const result = await fn()
+      // 关键防护：key 已变化时丢弃旧请求结果，避免租购 tab 显示按趟数据
+      if (currentKeyRef.current !== fetchKey) return
       // static 类别（车型/轮播图）空数组不缓存，避免空结果长期占位导致页面空白
       const isEmptyArray = Array.isArray(result) && result.length === 0
       const shouldPersist = category === 'static' && !isEmptyArray
@@ -146,6 +150,8 @@ export function useSWR<T>(
         setError(null)
       }
     } catch (err) {
+      // key 已变化时丢弃错误
+      if (currentKeyRef.current !== fetchKey) return
       if (mountedRef.current) {
         setError(err instanceof Error ? err : new Error(String(err)))
       }
@@ -155,6 +161,9 @@ export function useSWR<T>(
   }, [category])
 
   useEffect(() => {
+    // 更新当前 key 引用
+    currentKeyRef.current = key
+
     if (!key || !fetcherRef.current) {
       setLoading(false)
       return
