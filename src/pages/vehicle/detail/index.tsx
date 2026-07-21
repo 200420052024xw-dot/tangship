@@ -15,8 +15,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
-  ArrowLeft, Battery, Gauge, Grid3x3, Weight, Ruler,
-  ChevronRight, X, Truck,
+  Battery, Gauge, Grid3x3, Weight, Ruler,
+  ChevronLeft, ChevronRight, Truck,
 } from 'lucide-react-taro'
 import { getVehicleSnapshot, refreshVehicle } from '@/services/vehicle-catalog'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -41,7 +41,6 @@ const VehicleDetailPage: FC = () => {
   const [vehicle, setVehicle] = useState<Vehicle | null>(initialVehicle)
   const [loaded, setLoaded] = useState(Boolean(initialVehicle))
   const [currentImg, setCurrentImg] = useState(0)
-  const [previewIdx, setPreviewIdx] = useState(-1) // -1 = 未预览
 
   useEffect(() => {
     let active = true
@@ -112,22 +111,49 @@ const VehicleDetailPage: FC = () => {
         <View className="relative w-full bg-white">
           <Swiper
             className="h-60 w-full"
-            indicatorDots={images.length > 1}
-            indicatorColor="rgba(255,255,255,0.4)"
-            indicatorActiveColor="#fff"
+            indicatorDots={false}
             autoplay={false}
             circular={images.length > 1}
+            current={currentImg}
             onChange={(e) => setCurrentImg(e.detail.current)}
           >
             {images.map((src, idx) => (
               <SwiperItem key={idx}>
-                <View className="h-full w-full" onClick={() => setPreviewIdx(idx)}>
+                <View
+                  className="h-full w-full"
+                  onClick={() => {
+                    Taro.previewImage({ current: src, urls: images })
+                  }}
+                >
                   <Image className="h-full w-full" mode="aspectFit" src={src} />
                 </View>
               </SwiperItem>
             ))}
           </Swiper>
-          {/* 指示器（自定义） */}
+          {/* 左右切换按钮 */}
+          {images.length > 1 && (
+            <>
+              {currentImg > 0 && (
+                <View
+                  className="absolute left-2 top-1/2 z-10"
+                  style={{ transform: 'translateY(-50%)', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: '50%', padding: '6px' }}
+                  onClick={(e) => { e.stopPropagation(); setCurrentImg(currentImg - 1) }}
+                >
+                  <ChevronLeft size={20} color="#fff" />
+                </View>
+              )}
+              {currentImg < images.length - 1 && (
+                <View
+                  className="absolute right-2 top-1/2 z-10"
+                  style={{ transform: 'translateY(-50%)', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: '50%', padding: '6px' }}
+                  onClick={(e) => { e.stopPropagation(); setCurrentImg(currentImg + 1) }}
+                >
+                  <ChevronRight size={20} color="#fff" />
+                </View>
+              )}
+            </>
+          )}
+          {/* 指示器 */}
           {images.length > 1 && (
             <View className="absolute bottom-2 right-3 bg-black rounded-full px-2 py-1" style={{ opacity: 0.6 }}>
               <Text className="block text-xs text-white">{currentImg + 1}/{images.length}</Text>
@@ -258,40 +284,6 @@ const VehicleDetailPage: FC = () => {
         </Card>
       </View>
       </ScrollArea>
-
-      {/* 图片预览弹窗 */}
-      {previewIdx >= 0 && (
-        <View
-          className="fixed inset-0 z-50 bg-black flex items-center justify-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}
-          onClick={() => setPreviewIdx(-1)}
-        >
-          <View className="absolute top-4 right-4 z-10" onClick={(e) => { e.stopPropagation(); setPreviewIdx(-1) }}>
-            <X size={24} color="#fff" />
-          </View>
-          {images[previewIdx] && (
-            <Image
-              className="w-full max-h-full"
-              mode="aspectFit"
-              src={images[previewIdx]}
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          <View className="absolute bottom-8 flex items-center gap-4">
-            {previewIdx > 0 && (
-              <View className="bg-white rounded-full p-2" style={{ opacity: 0.2 }} onClick={(e) => { e.stopPropagation(); setPreviewIdx(previewIdx - 1) }}>
-                <ArrowLeft size={20} color="#fff" />
-              </View>
-            )}
-            <Text className="block text-sm text-white">{previewIdx + 1} / {images.length}</Text>
-            {previewIdx < images.length - 1 && (
-              <View className="bg-white rounded-full p-2" style={{ opacity: 0.2 }} onClick={(e) => { e.stopPropagation(); setPreviewIdx(previewIdx + 1) }}>
-                <ChevronRight size={20} color="#fff" />
-              </View>
-            )}
-          </View>
-        </View>
-      )}
 
       {/* 页面内操作栏：参与详情页转场，避免 fixed 层提前叠到首页。 */}
       <FixedActionBar fixed={false}>

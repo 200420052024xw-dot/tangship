@@ -147,7 +147,9 @@ export class AdminOrdersService {
     const values: Record<string, unknown> = { status: target, updated_at: timestamp };
     if (target === 'dispatching') { values.dispatch_note = note || null; values.dispatch_vehicle_count = vehicleCount; values.vehicle_plate = vehiclePlate || null; }
     if (target === 'completed') { values.completion_note = note; values.completion_proof_url = proofUrl; values.reserved_vehicle_count = 0; }
+    console.log('[transitionOrder] update values:', JSON.stringify(values), 'id:', id, 'current status:', order.status);
     const { data: updated, error } = await client.from('orders').update(values).eq('id', id).eq('status', order.status).select().maybeSingle();
+    console.log('[transitionOrder] update result:', JSON.stringify({ updated: !!updated, error: error?.message, data: updated }));
     if (error || !updated) throw new ConflictException('订单状态已变化，请刷新后重试');
     const { error: logError } = await client.from('order_status_logs').insert({ id: randomUUID(), order_id: id, from_status: order.status, to_status: target, operator_type: 'admin', operator_id: adminId, remark: note || `管理员更新为 ${target}`, created_at: timestamp });
     if (logError) throw new Error(`写入订单状态记录失败: ${logError.message}`);
