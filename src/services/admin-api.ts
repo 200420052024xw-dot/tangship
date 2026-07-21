@@ -23,5 +23,22 @@ export async function adminRequest<T>(options: Parameters<typeof Network.request
   if (response.statusCode < 200 || response.statusCode >= 300 || body?.code !== 200) { const error = new Error(body?.msg || body?.message || `请求失败（${response.statusCode}）`) as Error & { statusCode?: number }; error.statusCode = response.statusCode; throw error }
   return body.data
 }
+/** 管理员上传文件（携带 Bearer token） */
+export async function adminUploadFile(options: { url: string; filePath: string; name?: string; formData?: Record<string, string> }): Promise<{ url: string; objectKey: string }> {
+  const token = String(Taro.getStorageSync(ADMIN_TOKEN_KEY) || '')
+  if (!token) throw new Error('管理员未登录')
+  const response = await Network.uploadFile({
+    url: options.url,
+    filePath: options.filePath,
+    name: options.name || 'file',
+    formData: options.formData,
+    header: { Authorization: `Bearer ${token}` },
+  })
+  const body = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+  if (response.statusCode === 401 || response.statusCode === 403) { clearAdminSession(); throw new Error('管理员会话已失效') }
+  if (response.statusCode < 200 || response.statusCode >= 300 || body?.code !== 200) throw new Error(body?.msg || body?.message || `上传失败（${response.statusCode}）`)
+  return body.data as { url: string; objectKey: string }
+}
+
 export function clearAdminSession() { Taro.removeStorageSync(ADMIN_TOKEN_KEY); Taro.removeStorageSync(ADMIN_INFO_KEY) }
 export async function logoutAdmin() { try { await adminRequest({ url: '/api/admin/auth/logout', method: 'POST' }) } finally { clearAdminSession() } }
