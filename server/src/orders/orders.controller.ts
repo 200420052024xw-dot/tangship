@@ -3,6 +3,13 @@ import { OrdersService } from './orders.service';
 import { UserAuthGuard } from '../auth/auth';
 import { createOrderSchema, parseDto } from '../validation/schemas';
 
+function parseDeleteOrderIds(body: { ids?: unknown }): string[] {
+  if (!Array.isArray(body?.ids) || body.ids.length === 0 || body.ids.length > 100 || body.ids.some(id => typeof id !== 'string' || !id)) {
+    throw new BadRequestException('请选择要删除的订单');
+  }
+  return [...new Set(body.ids as string[])];
+}
+
 @Controller('orders')
 @UseGuards(UserAuthGuard)
 export class OrdersController {
@@ -27,12 +34,15 @@ export class OrdersController {
     return { code: 200, msg: 'success', data };
   }
 
+  @Post('batch-delete') @HttpCode(200)
+  async batchRemove(@Req() req: any, @Body() body: { ids?: unknown }) {
+    const data = await this.orders.softDelete(req.user.id, parseDeleteOrderIds(body));
+    return { code: 200, msg: '订单已删除', data };
+  }
+
   @Delete() @HttpCode(200)
   async remove(@Req() req: any, @Body() body: { ids?: unknown }) {
-    if (!Array.isArray(body?.ids) || body.ids.length === 0 || body.ids.length > 100 || body.ids.some(id => typeof id !== 'string' || !id)) {
-      throw new BadRequestException('请选择要删除的订单');
-    }
-    const data = await this.orders.softDelete(req.user.id, [...new Set(body.ids as string[])]);
+    const data = await this.orders.softDelete(req.user.id, parseDeleteOrderIds(body));
     return { code: 200, msg: '订单已删除', data };
   }
 

@@ -761,16 +761,16 @@ create(@Body() body: unknown) {
   return this.userService.create(result.data);
 }
 ```
-# 第二阶段数据持久化
+# 数据持久化
 
-后端使用 SQLite + Drizzle ORM。SQLite 只由 NestJS 后端访问，路径由 `SQLITE_DB_PATH` 指定；启动连接强制启用 foreign keys、WAL 和 busy timeout。SQLite 适合当前单实例开发和早期试运营，不作为未来多实例商用部署的最终数据库。
+扣子生产环境和微信小程序业务使用 Supabase。SQLite 仅作为管理员后台的本地演示数据源，不能在生产环境启用，也不提供向 Supabase 导入本地测试记录的能力。
 
-常用命令：`pnpm build:server`、`pnpm --filter server db:migrate`、`pnpm --filter server db:init-admin`、`pnpm --filter server db:export -- sqlite-export.json`。首个管理员必须临时设置 `INIT_ADMIN_USERNAME` 和至少 12 位的 `INIT_ADMIN_PASSWORD`，项目不提供默认密码。开发身份仅在 `NODE_ENV !== production && ENABLE_DEV_AUTH=true` 时有效。
-
-PostgreSQL 迁移步骤见 `docs/sqlite-to-postgresql.md`。
+运行 `pnpm dev:admin:local` 可自动创建 `server/data/admin-local.sqlite`，并同时启动 NestJS 后端和管理员前端。默认本地账号为 `wjf / 123`；运行 `pnpm db:admin:reset` 可清空演示库，下次启动会重新建表和填充数据。扣子部署迁移步骤见 `docs/coze-admin-migration-handoff.md`。
 
 ## 独立管理员后台
 
-`admin-web/` 是独立 React + TypeScript + Vite 应用，不属于消费者小程序。开发运行 `pnpm dev:admin`，生产构建 `pnpm build:admin`。通过 `VITE_API_BASE_URL` 指向共用 NestJS API；同源部署时可留空。后端使用 `ADMIN_ALLOWED_ORIGINS` 限制允许携带管理员 Cookie 的后台来源。
+`admin-web/` 是独立 React + TypeScript + Vite 应用，不属于消费者小程序。本地完整测试使用 `pnpm dev:admin:local`；仅启动前端可使用 `pnpm dev:admin`。生产构建会把管理员资源写入 `server/dist/public/admin` 并由 NestJS 同源提供 `/admin/`。通过 `VITE_API_BASE_URL` 指向共用 NestJS API；同源部署时可留空。后端使用 `ADMIN_ALLOWED_ORIGINS` 限制允许携带管理员 Cookie 的后台来源。
 
-管理员角色为 `super_admin`、`operator`、`finance`。前两者可以查看和审核订单，finance 只能查看脱敏个人信息、价格和支付信息，不能审核。首个超级管理员仍通过 `INIT_ADMIN_USERNAME`、`INIT_ADMIN_PASSWORD` 和 `pnpm --filter server db:init-admin` 创建。
+管理端后续开发遵循“脱离扣子也能完整实现和测试、线上适配保持可迁移”的原则：业务页面、API 契约、校验和权限不直接依赖扣子 SDK；新功能先完成 SQLite 本地实现，再补 Supabase/TOS 适配与迁移文件。
+
+管理员角色为 `super_admin`、`operator`、`finance`。前两者可以查看和审核订单，finance 只能查看脱敏个人信息、价格和支付信息，不能审核。线上管理员仍由 Supabase 环境变量和初始化流程管理，本地演示账号只在 `ADMIN_DATA_BACKEND=sqlite` 且非生产环境时有效。

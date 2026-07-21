@@ -158,11 +158,6 @@ const AddressListPage: FC = () => {
                           {address.label}
                         </Badge>
                       )}
-                      {!selectMode && address.usageType && (
-                        <Badge className="text-xs px-2 py-0 border-0 bg-slate-100 text-slate-600">
-                          {USAGE_LABELS[address.usageType]}
-                        </Badge>
-                      )}
                       {address.isDefault && (
                         <Badge className="text-xs px-2 py-0 bg-blue-600 text-white border-0">
                           默认

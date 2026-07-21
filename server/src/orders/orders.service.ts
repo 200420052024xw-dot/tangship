@@ -330,6 +330,7 @@ export class OrdersService {
     await this.getClient().from('orders').update({
       internal_note: String(data.internalNote || '') || null,
       user_note: String(data.userNote || '') || null,
+      reserved_vehicle_count: data.decision === 'approve' ? Math.min(99, Math.max(1, Number(data.vehicleCount) || 1)) : 0,
     }).eq('id', id);
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);

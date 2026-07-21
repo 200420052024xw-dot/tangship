@@ -30,6 +30,7 @@ export const userSessions = pgTable("user_sessions", {
 export const adminUsers = pgTable("admin_users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   username: varchar("username", { length: 64 }).notNull().unique(),
+  nickname: varchar("nickname", { length: 64 }).notNull().default(''),
   password_hash: varchar("password_hash", { length: 256 }).notNull(),
   role: varchar("role", { length: 32 }).notNull().default('reviewer'),
   status: varchar("status", { length: 20 }).notNull().default('active'),
@@ -102,6 +103,12 @@ export const orders = pgTable("orders", {
   rejection_reason: text("rejection_reason"),
   internal_note: text("internal_note"),
   user_note: text("user_note"),
+  reserved_vehicle_count: integer("reserved_vehicle_count").notNull().default(0),
+  dispatch_note: text("dispatch_note"),
+  dispatch_vehicle_count: integer("dispatch_vehicle_count").notNull().default(0),
+  vehicle_plate: varchar("vehicle_plate", { length: 32 }),
+  completion_note: text("completion_note"),
+  completion_proof_url: text("completion_proof_url"),
   idempotency_key: varchar("idempotency_key", { length: 64 }).notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -187,9 +194,9 @@ export const auditLogs = pgTable("audit_logs", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   admin_user_id: varchar("admin_user_id", { length: 36 }).notNull().references(() => adminUsers.id),
   action: varchar("action", { length: 64 }).notNull(),
-  resource_type: varchar("resource_type", { length: 32 }).notNull(),
-  resource_id: varchar("resource_id", { length: 36 }).notNull(),
-  detail_json: text("detail_json").notNull(),
+  target_type: varchar("target_type", { length: 32 }).notNull(),
+  target_id: varchar("target_id", { length: 36 }).notNull(),
+  detail: text("detail").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, t => [index("audit_logs_admin_idx").on(t.admin_user_id)]);
 
@@ -210,6 +217,7 @@ export const vehicleCatalog = pgTable("vehicle_catalog", {
   enabled: boolean("enabled").notNull().default(true),
   requires_approval: boolean("requires_approval").notNull().default(false),
   sort_order: integer("sort_order").notNull().default(0),
+  total_count: integer("total_count").notNull().default(0),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, t => [
@@ -289,3 +297,17 @@ export const contactSettings = pgTable("contact_settings", {
   extra_text: text("extra_text").notNull().default(''), // 额外提示文字
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const adminNotifications = pgTable("admin_notifications", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  admin_user_id: varchar("admin_user_id", { length: 36 }).references(() => adminUsers.id, { onDelete: 'cascade' }),
+  type: varchar("type", { length: 40 }).notNull(),
+  title: varchar("title", { length: 128 }).notNull(),
+  content: text("content").notNull(),
+  target_path: varchar("target_path", { length: 256 }),
+  read_at: timestamp("read_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  index("admin_notifications_admin_read_idx").on(t.admin_user_id, t.read_at),
+  index("admin_notifications_created_idx").on(t.created_at),
+]);

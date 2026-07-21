@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 业务包含三类订单:按趟散单(`single`)、包月专线咨询单(`monthly`)、租车购车咨询单(`rental`)。9 个车型(`z2`/`z5-2026`/`l5`/`l5-max`/`z8`/`z8-max`/`z5-c`/`z8-max-c`/`z5-multi`)。订单状态:`pending`/`accepted`/`in_progress`/`completed`/`cancelled`。
 
-完整开发规范见 `AGENTS.md` 与 `assets/AGENTS.md`(两者内容一致,后者会被构建流程复制到 `assets/`),设计系统与品牌色见 `DESIGN.md`,功能方案见 `assets/详细地址功能实施方案.md`。**`AGENTS.md` 中的"网络请求规范"与"H5/小程序跨端兼容性"为强约束**。
+完整开发规范见 `AGENTS.md` 与 `assets/AGENTS.md`(两者内容一致,后者会被构建流程复制到 `assets/`),设计系统与品牌色见 `DESIGN.md`,功能方案见 `assets/详细地址功能实施方案.md`,**面向扣子编程 Agent 的三端贯通步骤与故障排查见 `INTEGRATION.md`(必读)**。**`AGENTS.md` 中的"网络请求规范"与"H5/小程序跨端兼容性"为强约束**。
 
 ## 常用命令
 

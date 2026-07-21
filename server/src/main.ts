@@ -8,10 +8,11 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { SupabaseService } from '@/supabase/supabase.service';
 import { seedSupabase } from '@/supabase/seed';
+import { AdminDataService } from '@/admin-data/admin-data.service';
 
 for (const candidate of [resolve(process.cwd(), '.env.local'), resolve(process.cwd(), '../.env.local')]) {
   if (existsSync(candidate)) {
-    loadEnv({ path: candidate, override: process.env.NODE_ENV !== 'production' });
+    loadEnv({ path: candidate, override: false });
     break;
   }
 }
@@ -34,7 +35,14 @@ async function bootstrap() {
   const allowedOrigins=(process.env.ADMIN_ALLOWED_ORIGINS||'http://localhost:5174').split(',').map(v=>v.trim()).filter(Boolean);
   const isDev = process.env.NODE_ENV !== 'production';
   app.enableCors({origin:(origin,callback)=>{
-    if(!origin||allowedOrigins.includes(origin)||(isDev&&(origin.includes('localhost')||origin.includes('dev.coze.site'))))callback(null,true);
+    let developmentOrigin = false;
+    if (isDev && origin) {
+      try {
+        const hostname = new URL(origin).hostname.toLowerCase();
+        developmentOrigin = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'dev.coze.site' || hostname.endsWith('.dev.coze.site') || hostname.endsWith('.cpolar.top') || hostname.endsWith('.cpolar.cn');
+      } catch { developmentOrigin = false; }
+    }
+    if(!origin||allowedOrigins.includes(origin)||developmentOrigin)callback(null,true);
     else callback(new Error('Origin not allowed'));
   },credentials:true});
   app.setGlobalPrefix('api', {
@@ -60,8 +68,11 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   // Seed database on startup
-  const supabaseService = app.get(SupabaseService);
-  await seedSupabase(supabaseService);
+  const adminData = app.get(AdminDataService);
+  if (!adminData.isSqlite) {
+    const supabaseService = app.get(SupabaseService);
+    await seedSupabase(supabaseService);
+  }
 
   const port = parsePort();
   try {

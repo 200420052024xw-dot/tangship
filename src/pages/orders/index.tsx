@@ -63,6 +63,7 @@ function getIconColor(colorClass: string): string {
 }
 
 export default function OrdersPage() {
+  const isWeapp = Taro.getEnv() === Taro.ENV_TYPE.WEAPP
   const [activeTab, setActiveTab] = useState('all')
   const [selecting, setSelecting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -158,8 +159,8 @@ export default function OrdersPage() {
     try {
       if (realIds.length) {
         await consumerRequest<{ deletedIds: string[] }>({
-          url: '/api/orders',
-          method: 'DELETE',
+          url: '/api/orders/batch-delete',
+          method: 'POST',
           data: { ids: realIds },
         })
       }
@@ -310,7 +311,7 @@ export default function OrdersPage() {
       </View>
 
       {selecting && !deleteDialogOpen && (
-        <FixedActionBar bottom={50} safeArea={false}>
+        <FixedActionBar bottom={isWeapp ? 0 : 50} safeArea={false}>
           <View className="flex w-full flex-row items-center justify-between gap-4">
             <Text className="block min-w-0 flex-1 text-sm text-slate-600">已选择 {selectedIds.size} 个订单</Text>
             <Button

@@ -61,7 +61,7 @@ const AddressEditPage: FC = () => {
   const [latitude, setLatitude] = useState(0)
   const [label, setLabel] = useState<AddressLabel>('其他')
   const [isDefault, setIsDefault] = useState(false)
-  const [usageType, setUsageType] = useState<AddressUsage>(usageParam)
+  const [usageType, setUsageType] = useState<AddressUsage>(editId ? usageParam : 'both')
   const [mapPickerFailed, setMapPickerFailed] = useState(false)
   const [saving, setSaving] = useState(false)
 

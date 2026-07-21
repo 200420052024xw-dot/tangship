@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StorageService } from '../storage/storage.service';
@@ -16,6 +16,9 @@ export const DEFAULT_PRICING = {
 const json = (v: any) => JSON.stringify(v);
 const parse = (v: string) => JSON.parse(v);
 const utc = () => new Date().toISOString();
+type VehicleServiceMode = 'single' | 'monthly' | 'rental';
+const syncedVehicleId = (id: string, mode: VehicleServiceMode) => { const baseId = id.replace(/-(monthly|rental)$/i, ''); return mode === 'single' ? baseId : `${baseId}-${mode}`; };
+const normalizeSyncModes = (value: unknown): VehicleServiceMode[] => Array.isArray(value) ? [...new Set(value.filter((mode): mode is VehicleServiceMode => mode === 'single' || mode === 'monthly' || mode === 'rental'))] : [];
 
 /**
  * 真实车型图片 TOS Key 映射
@@ -39,6 +42,7 @@ export class OperationsService implements OnModuleInit {
   private getClient() { return this.supabase.getClient(); }
 
   async onModuleInit() {
+    if (process.env.ADMIN_DATA_BACKEND === 'sqlite') return;
     const client = this.getClient();
     const t = utc();
 
@@ -90,7 +94,7 @@ export class OperationsService implements OnModuleInit {
 
   async listVehicles(admin = false, serviceMode?: string) {
     const cacheKey = (admin ? CACHE_KEYS.VEHICLE_CATALOG + ':admin' : CACHE_KEYS.VEHICLE_CATALOG) + (serviceMode ? `:${serviceMode}` : '');
-    const cached = serverCache.get<any[]>(cacheKey);
+    const cached = admin ? undefined : serverCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
     const client = this.getClient();
@@ -98,14 +102,16 @@ export class OperationsService implements OnModuleInit {
     let query = client.from('vehicle_catalog').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
     if (!admin) query = query.eq('enabled', 1);
     if (serviceMode) query = query.eq('service_mode', serviceMode);
-    const [{ data: rows, error }, { data: allImgs }] = await Promise.all([
+    const [{ data: rows, error }, { data: allImgs }, { data: activeOrders }] = await Promise.all([
       query,
-      client.from('vehicle_images').select('vehicle_id, url, object_key, is_primary, sort_order'),
+      client.from('vehicle_images').select('id, vehicle_id, url, object_key, is_primary, sort_order').order('is_primary', { ascending: false }).order('sort_order', { ascending: true }).order('id', { ascending: true }),
+      admin ? client.from('orders').select('vehicle_id,reserved_vehicle_count').in('status', ['pending_payment', 'paid', 'dispatching', 'delivering']) : Promise.resolve({ data: [] }),
     ]);
     if (error) throw new Error(`查询车型失败: ${error.message}`);
 
     // 按车型分组图片，对有 TOS key 的图片动态生成签名 URL
     const imgMap = new Map<string, string[]>();
+    const imageItemMap = new Map<string, Array<{ id: string; url: string; objectKey: string; isPrimary: boolean; sortOrder: number }>>();
     for (const img of (allImgs || [])) {
       const list = imgMap.get(img.vehicle_id) || [];
       let url = img.url;
@@ -119,19 +125,28 @@ export class OperationsService implements OnModuleInit {
       }
       list.push(url);
       imgMap.set(img.vehicle_id, list);
+      const items = imageItemMap.get(img.vehicle_id) || [];
+      items.push({ id: img.id, url, objectKey: img.object_key || '', isPrimary: !!img.is_primary, sortOrder: Number(img.sort_order) || 0 });
+      imageItemMap.set(img.vehicle_id, items);
     }
 
-    const result = (rows || []).map((v: any) => ({
-      id: v.id, name: v.name, fullName: v.full_name, subtitle: v.subtitle,
-      description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
-      sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
-      restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
-      serviceMode: v.service_mode || 'single',
-      pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
-      images: imgMap.get(v.id) || [],
-    }));
+    const reservedByVehicle = new Map<string, number>();
+    for (const order of activeOrders || []) reservedByVehicle.set(order.vehicle_id, (reservedByVehicle.get(order.vehicle_id) || 0) + Number(order.reserved_vehicle_count || 0));
+    const result = (rows || []).map((v: any) => {
+      const totalCount = Math.max(0, Number(v.total_count) || 0), reservedCount = reservedByVehicle.get(v.id) || 0;
+      return {
+        id: v.id, name: v.name, fullName: v.full_name, subtitle: v.subtitle,
+        description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
+        sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
+        restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
+        serviceMode: v.service_mode || 'single',
+        pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
+        ...(admin ? { totalCount, reservedCount, availableCount: totalCount - reservedCount, imageItems: imageItemMap.get(v.id) || [] } : {}),
+        images: imgMap.get(v.id) || [],
+      };
+    });
 
-    serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
+    if (!admin) serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
     return result;
   }
 
@@ -154,17 +169,57 @@ export class OperationsService implements OnModuleInit {
       modes_json: json(b.supportedModes || ['single']), service_mode: b.serviceMode || 'single',
       pricing_hint_json: json(b.pricingDescription || {}),
       tags_json: json(b.tags || []), enabled: b.enabled === false ? 0 : 1,
-      requires_approval: b.requiresApproval ? 1 : 0, sort_order: Number(b.sortOrder) || 0, updated_at: t,
+      requires_approval: b.requiresApproval ? 1 : 0, sort_order: Number(b.sortOrder) || 0,
+      total_count: Math.max(0, Math.floor(Number(b.totalCount) || 0)), updated_at: t,
     };
 
     if (exists) {
-      await client.from('vehicle_catalog').update(values).eq('id', id);
+      const { error } = await client.from('vehicle_catalog').update(values).eq('id', id);
+      if (error) throw new BadRequestException(`保存车型失败: ${error.message}`);
     } else {
-      await client.from('vehicle_catalog').insert({ id, ...values, created_at: t });
+      const { error } = await client.from('vehicle_catalog').insert({ id, ...values, created_at: t });
+      if (error) throw new BadRequestException(`新增车型失败: ${error.message}`);
     }
-    await this.audit(adminId, exists ? 'vehicle.update' : 'vehicle.create', 'vehicle', id, { name: b.name });
+
+    const syncModes = normalizeSyncModes(b.syncModes).filter(mode => mode !== (b.serviceMode || 'single'));
+    if (syncModes.length) {
+      const { data: sourceImages, error: sourceImageError } = await client.from('vehicle_images').select('url,object_key,is_primary,sort_order').eq('vehicle_id', id);
+      if (sourceImageError) throw new BadRequestException(`读取车型图片失败: ${sourceImageError.message}`);
+      for (const mode of syncModes) {
+        const targetId = syncedVehicleId(id, mode);
+        const targetValues = { ...values, service_mode: mode, modes_json: json([mode]) };
+        const { error: vehicleError } = await client.from('vehicle_catalog').upsert({ id: targetId, ...targetValues, created_at: t }, { onConflict: 'id' });
+        if (vehicleError) throw new BadRequestException(`同步${mode}车型失败: ${vehicleError.message}`);
+        const { error: deleteImageError } = await client.from('vehicle_images').delete().eq('vehicle_id', targetId);
+        if (deleteImageError) throw new BadRequestException(`清理目标车型图片失败: ${deleteImageError.message}`);
+        if (sourceImages?.length) {
+          const copies = sourceImages.map(image => ({ id: randomUUID(), vehicle_id: targetId, url: image.url, object_key: image.object_key || '', is_primary: image.is_primary ? 1 : 0, sort_order: Number(image.sort_order) || 0, created_at: t }));
+          const { error: imageError } = await client.from('vehicle_images').insert(copies);
+          if (imageError) throw new BadRequestException(`同步车型图片失败: ${imageError.message}`);
+        }
+      }
+    }
+    await this.audit(adminId, exists ? 'vehicle.update' : 'vehicle.create', 'vehicle', id, { name: b.name, syncModes });
     serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
     return this.getVehicle(id);
+  }
+
+  async deleteVehicle(adminId: string, id: string) {
+    const client = this.getClient();
+    const { data: referenced } = await client.from('orders').select('id').eq('vehicle_id', id).limit(1).maybeSingle();
+    if (referenced) throw new ConflictException('该车型已被订单引用，不能删除；可以将其下架');
+    const { data: images } = await client.from('vehicle_images').select('object_key').eq('vehicle_id', id);
+    const { error: imageError } = await client.from('vehicle_images').delete().eq('vehicle_id', id);
+    if (imageError) throw new BadRequestException(`删除车型图片记录失败: ${imageError.message}`);
+    const { error } = await client.from('vehicle_catalog').delete().eq('id', id);
+    if (error) throw new BadRequestException(`删除车型失败: ${error.message}`);
+    for (const image of images || []) {
+      if (!image.object_key) continue;
+      const { data: shared } = await client.from('vehicle_images').select('id').eq('object_key', image.object_key).limit(1).maybeSingle();
+      if (!shared) await this.storage.deleteFile(image.object_key).catch(() => undefined);
+    }
+    await this.audit(adminId, 'vehicle.delete', 'vehicle', id, {});
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
   }
 
   async listBanners(admin = false) {
@@ -315,6 +370,26 @@ export class OperationsService implements OnModuleInit {
       sort_order: Number(asset.sortOrder) || 0, created_at: t,
     });
     await this.audit(adminId, 'vehicle.image.add', 'vehicle', vehicleId, {});
+    return this.getVehicle(vehicleId);
+  }
+
+  async deleteVehicleImage(adminId: string, vehicleId: string, imageId: string) {
+    const client = this.getClient();
+    const { data: image, error: findError } = await client.from('vehicle_images').select('id,object_key,is_primary').eq('id', imageId).eq('vehicle_id', vehicleId).maybeSingle();
+    if (findError) throw new BadRequestException(`读取车型图片失败: ${findError.message}`);
+    if (!image) throw new NotFoundException('车型图片不存在');
+    const { error: deleteError } = await client.from('vehicle_images').delete().eq('id', imageId).eq('vehicle_id', vehicleId);
+    if (deleteError) throw new BadRequestException(`删除车型图片失败: ${deleteError.message}`);
+    if (image.is_primary) {
+      const { data: next } = await client.from('vehicle_images').select('id').eq('vehicle_id', vehicleId).order('sort_order', { ascending: true }).order('id', { ascending: true }).limit(1).maybeSingle();
+      if (next) await client.from('vehicle_images').update({ is_primary: 1 }).eq('id', next.id);
+    }
+    if (image.object_key) {
+      const { data: shared } = await client.from('vehicle_images').select('id').eq('object_key', image.object_key).limit(1).maybeSingle();
+      if (!shared) await this.storage.deleteFile(image.object_key).catch(() => undefined);
+    }
+    await this.audit(adminId, 'vehicle.image.delete', 'vehicle', vehicleId, { imageId });
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
     return this.getVehicle(vehicleId);
   }
 

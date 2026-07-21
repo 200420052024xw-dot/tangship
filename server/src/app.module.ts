@@ -8,9 +8,10 @@ import { AdminModule } from '@/admin/admin.module';
 import { AddressesModule } from '@/addresses/addresses.module';
 import { OperationsModule } from '@/operations/operations.module';
 import { AuthModule } from '@/auth/auth.module';
+import { AdminDataModule } from '@/admin-data/admin-data.module';
 
 @Module({
-  imports: [SupabaseModule, StorageModule, AuthModule, OrdersModule, AdminModule, AddressesModule, OperationsModule],
+  imports: [SupabaseModule, AdminDataModule, StorageModule, AuthModule, OrdersModule, AdminModule, AddressesModule, OperationsModule],
   controllers: [AppController],
   providers: [AppService],
 })
