@@ -351,11 +351,11 @@ export class OperationsService implements OnModuleInit {
     if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype) || file.size > 5 * 1024 * 1024)
       throw new BadRequestException('仅支持 5MB 内 JPG、PNG、WebP 图片');
     const ext = file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
-    const key = `admin/${prefix}/${randomUUID()}.${ext}`;
-    const result = await this.storage.uploadFile({ fileContent: file.buffer, fileName: key, contentType: file.mimetype });
-    const url = (result as any)?.fileKey || (result as any)?.url || key;
-    await this.audit(adminId, 'asset.upload', 'asset', key, { mime: file.mimetype, size: file.size });
-    return { url, objectKey: key };
+    const fileName = `admin/${prefix}/${randomUUID()}.${ext}`;
+    const actualKey = await this.storage.uploadFile({ fileContent: file.buffer, fileName, contentType: file.mimetype });
+    const url = await this.storage.getSignedUrl(actualKey, 86400);
+    await this.audit(adminId, 'asset.upload', 'asset', actualKey, { mime: file.mimetype, size: file.size });
+    return { url, objectKey: actualKey };
   }
 
   async addVehicleImage(adminId: string, vehicleId: string, asset: any) {
