@@ -1,44 +1,45 @@
 import { Text, View } from '@tarojs/components'
-import { useLoad } from '@tarojs/taro'
-import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { adminRequest, getAdminInfo } from '@/services/admin-api'
+import { useSWR } from '@/stores/data-cache'
 
 type Vehicle = { id: string; name: string; fullName: string; enabled: boolean; sortOrder: number }
-export default function AdminSettings() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [pricing, setPricing] = useState<Record<string, any>>()
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+type PricingInfo = Record<string, any>
 
-  useLoad(() => {
-    Promise.all([
-      adminRequest<Vehicle[]>({ url: '/api/admin/operations/vehicles' }),
-      adminRequest<Record<string, any>>({ url: '/api/admin/operations/pricing' })
-    ]).then(([vehicleRows, rules]) => {
-      setVehicles(vehicleRows)
-      setPricing(rules)
-    }).catch(reason => {
-      setError((reason as Error).message)
-    }).finally(() => {
-      setLoading(false)
-    })
-  })
+export default function AdminSettings() {
+  const role = getAdminInfo()?.role
+
+  // 使用 useSWR 缓存车型数据，session 类别（2 min TTL），避免每次打开都重新请求
+  const { data: vehicles, loading: loadingVehicles, error: vehiclesError } = useSWR<Vehicle[]>(
+    'admin-vehicles', async () => {
+      const result = await adminRequest<Vehicle[]>({ url: '/api/admin/operations/vehicles' })
+      return result || []
+    }, 'session'
+  )
+
+  const { data: pricing, loading: loadingPricing, error: pricingError } = useSWR<PricingInfo>(
+    'admin-pricing', async () => {
+      return await adminRequest<PricingInfo>({ url: '/api/admin/operations/pricing' })
+    }, 'session'
+  )
+
+  const error = vehiclesError || pricingError
+  const vehicleList = vehicles || []
 
   return (
     <View className="min-h-screen bg-slate-50 p-4 space-y-3">
       <Card><CardContent className="p-4">
         <Text className="block text-lg font-semibold">运营设置</Text>
-        <Text className="block mt-1 text-sm text-slate-500">当前角色：{getAdminInfo()?.role}。修改车型、图片和发布计费规则仅限超级管理员。</Text>
+        <Text className="block mt-1 text-sm text-slate-500">当前角色：{role}。修改车型、图片和发布计费规则仅限超级管理员。</Text>
       </CardContent></Card>
 
-      {error && <Text className="block text-red-600">{error}</Text>}
+      {error && <Text className="block text-red-600">{error?.message || String(error)}</Text>}
 
       <Card><CardContent className="p-4 space-y-3">
         <Text className="block font-semibold">车型状态</Text>
-        {loading ? (
+        {loadingVehicles ? (
           <View className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <View key={i} className="flex justify-between py-2">
@@ -50,8 +51,8 @@ export default function AdminSettings() {
               </View>
             ))}
           </View>
-        ) : vehicles.length > 0 ? (
-          vehicles.map(vehicle => (
+        ) : vehicleList.length > 0 ? (
+          vehicleList.map(vehicle => (
             <View key={vehicle.id} className="flex justify-between border-b border-slate-100 py-2">
               <View>
                 <Text className="block text-sm">{vehicle.name}</Text>
@@ -67,7 +68,7 @@ export default function AdminSettings() {
 
       <Card><CardContent className="p-4">
         <Text className="block font-semibold">计费版本</Text>
-        {loading ? (
+        {loadingPricing ? (
           <View className="mt-2 space-y-2">
             <Skeleton className="h-4 w-28" />
             <Skeleton className="h-4 w-24" />

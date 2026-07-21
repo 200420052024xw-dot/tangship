@@ -170,6 +170,9 @@ export function useSWR<T>(
     if (cached !== null) {
       setData(cached)
       setLoading(false)
+    } else {
+      // key 变化后无缓存：立即清空旧 data，避免显示上一个 key 的残留数据（如租购 tab 显示按趟内容）
+      setData(null)
     }
 
     // 缓存过期 or 无缓存 → 请求
