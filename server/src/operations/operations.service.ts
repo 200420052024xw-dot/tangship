@@ -57,7 +57,7 @@ export class OperationsService implements OnModuleInit {
           restrictions_json: json(v.restrictions), modes_json: json(v.supportedModes),
           service_mode: v.serviceMode || 'single',
           pricing_hint_json: json(v.pricingDescription), tags_json: json(v.tags),
-          enabled: v.enabled ? 1 : 0, requires_approval: v.requiresApproval ? 1 : 0,
+          enabled: v.enabled ? true : false, requires_approval: v.requiresApproval ? true : false,
           sort_order: sort, created_at: t, updated_at: t,
         });
         if (error) console.error(`Seed vehicle ${v.id} failed:`, error.message);
@@ -73,7 +73,7 @@ export class OperationsService implements OnModuleInit {
           description: v.description, specs_json: json(v.specs), scenes_json: json(v.applicableScenes),
           restrictions_json: json(v.restrictions), modes_json: json(v.supportedModes),
           pricing_hint_json: json(v.pricingDescription), tags_json: json(v.tags),
-          requires_approval: v.requiresApproval ? 1 : 0, sort_order: sort, updated_at: t,
+          requires_approval: v.requiresApproval ? true : false, sort_order: sort, updated_at: t,
         }).eq('id', v.id).eq('subtitle', '').eq('restrictions_json', '[]').eq('tags_json', '[]');
       }
       // Seed images/banners if missing
@@ -100,7 +100,7 @@ export class OperationsService implements OnModuleInit {
     const client = this.getClient();
     // 批量查询: 一次取车型 + 一次取所有图片（消除 N+1）
     let query = client.from('vehicle_catalog').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
-    if (!admin) query = query.eq('enabled', 1);
+    if (!admin) query = query.eq('enabled', true);
     if (serviceMode) query = query.eq('service_mode', serviceMode);
     const [{ data: rows, error }, { data: allImgs }, { data: activeOrders }] = await Promise.all([
       query,
@@ -168,8 +168,8 @@ export class OperationsService implements OnModuleInit {
       scenes_json: json(b.applicableScenes || []), restrictions_json: json(b.restrictions || []),
       modes_json: json(b.supportedModes || ['single']), service_mode: b.serviceMode || 'single',
       pricing_hint_json: json(b.pricingDescription || {}),
-      tags_json: json(b.tags || []), enabled: b.enabled === false ? 0 : 1,
-      requires_approval: b.requiresApproval ? 1 : 0, sort_order: Number(b.sortOrder) || 0,
+      tags_json: json(b.tags || []), enabled: b.enabled === false ? false : true,
+      requires_approval: b.requiresApproval ? true : false, sort_order: Number(b.sortOrder) || 0,
       total_count: Math.max(0, Math.floor(Number(b.totalCount) || 0)), updated_at: t,
     };
 
@@ -193,7 +193,7 @@ export class OperationsService implements OnModuleInit {
         const { error: deleteImageError } = await client.from('vehicle_images').delete().eq('vehicle_id', targetId);
         if (deleteImageError) throw new BadRequestException(`清理目标车型图片失败: ${deleteImageError.message}`);
         if (sourceImages?.length) {
-          const copies = sourceImages.map(image => ({ id: randomUUID(), vehicle_id: targetId, url: image.url, object_key: image.object_key || '', is_primary: image.is_primary ? 1 : 0, sort_order: Number(image.sort_order) || 0, created_at: t }));
+          const copies = sourceImages.map(image => ({ id: randomUUID(), vehicle_id: targetId, url: image.url, object_key: image.object_key || '', is_primary: image.is_primary ? true : false, sort_order: Number(image.sort_order) || 0, created_at: t }));
           const { error: imageError } = await client.from('vehicle_images').insert(copies);
           if (imageError) throw new BadRequestException(`同步车型图片失败: ${imageError.message}`);
         }
@@ -229,7 +229,7 @@ export class OperationsService implements OnModuleInit {
 
     const client = this.getClient();
     let query = client.from('content_banners').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
-    if (!admin) query = query.eq('enabled', 1);
+    if (!admin) query = query.eq('enabled', true);
     const { data: rows, error } = await query;
     if (error) throw new Error(`查询轮播图失败: ${error.message}`);
 
@@ -266,7 +266,7 @@ export class OperationsService implements OnModuleInit {
     const { error } = await client.from('content_banners').upsert({
       id, image_url: b.imageUrl, object_key: key, title: b.title,
       link_type: b.linkType, link_target: b.linkTarget || '',
-      sort_order: Number(b.sortOrder) || 0, enabled: b.enabled === false ? 0 : 1,
+      sort_order: Number(b.sortOrder) || 0, enabled: b.enabled === false ? false : true,
       updated_at: t, created_at: t,
     });
     if (error) throw new Error(`保存轮播图失败: ${error.message}`);
@@ -363,10 +363,10 @@ export class OperationsService implements OnModuleInit {
     if (!vehicle) throw new BadRequestException('车型不存在');
     const client = this.getClient();
     const t = utc();
-    if (asset.isPrimary) await client.from('vehicle_images').update({ is_primary: 0 }).eq('vehicle_id', vehicleId);
+    if (asset.isPrimary) await client.from('vehicle_images').update({ is_primary: false }).eq('vehicle_id', vehicleId);
     await client.from('vehicle_images').insert({
       id: randomUUID(), vehicle_id: vehicleId, url: asset.url,
-      object_key: asset.objectKey || '', is_primary: asset.isPrimary ? 1 : 0,
+      object_key: asset.objectKey || '', is_primary: !!asset.isPrimary,
       sort_order: Number(asset.sortOrder) || 0, created_at: t,
     });
     await this.audit(adminId, 'vehicle.image.add', 'vehicle', vehicleId, {});
@@ -382,7 +382,7 @@ export class OperationsService implements OnModuleInit {
     if (deleteError) throw new BadRequestException(`删除车型图片失败: ${deleteError.message}`);
     if (image.is_primary) {
       const { data: next } = await client.from('vehicle_images').select('id').eq('vehicle_id', vehicleId).order('sort_order', { ascending: true }).order('id', { ascending: true }).limit(1).maybeSingle();
-      if (next) await client.from('vehicle_images').update({ is_primary: 1 }).eq('id', next.id);
+      if (next) await client.from('vehicle_images').update({ is_primary: true }).eq('id', next.id);
     }
     if (image.object_key) {
       const { data: shared } = await client.from('vehicle_images').select('id').eq('object_key', image.object_key).limit(1).maybeSingle();
@@ -420,7 +420,7 @@ export class OperationsService implements OnModuleInit {
         const url = await this.storage.getSignedUrl(tosKey, 31536000); // 1 年有效期
         await client.from('vehicle_images').insert({
           id: randomUUID(), vehicle_id: vehicleId, url, object_key: tosKey,
-          is_primary: 1, sort_order: 0, created_at: t,
+          is_primary: true, sort_order: 0, created_at: t,
         });
       } catch (e) {
         console.error(`Seed real image for ${vehicleId} failed, falling back to SVG:`, e.message);
@@ -428,7 +428,7 @@ export class OperationsService implements OnModuleInit {
         const color = vehicleId.startsWith('z5') ? '#10B981' : vehicleId.startsWith('z8') ? '#F59E0B' : '#3B82F6';
         await client.from('vehicle_images').insert({
           id: randomUUID(), vehicle_id: vehicleId, url: this.vehicleSvg(name, color, '🚐'), object_key: '',
-          is_primary: 1, sort_order: 0, created_at: t,
+          is_primary: true, sort_order: 0, created_at: t,
         });
       }
     }
@@ -439,7 +439,7 @@ export class OperationsService implements OnModuleInit {
       const url = this.vehicleSvg(CANONICAL_VEHICLES.find(v => v.id === vehicleId)?.name || vehicleId, color, icon);
       await client.from('vehicle_images').insert({
         id: randomUUID(), vehicle_id: vehicleId, url, object_key: '',
-        is_primary: 1, sort_order: 0, created_at: t,
+        is_primary: true, sort_order: 0, created_at: t,
       });
     }
   }
@@ -481,7 +481,7 @@ export class OperationsService implements OnModuleInit {
           const url = await this.storage.getSignedUrl(tosKey, 31536000);
           await client.from('vehicle_images').insert({
             id: randomUUID(), vehicle_id: vehicleId, url, object_key: tosKey,
-            is_primary: 1, sort_order: 0, created_at: t,
+            is_primary: true, sort_order: 0, created_at: t,
           });
           console.log(`[VehicleImage] Created real image for ${vehicleId}`);
         } catch (e) {
@@ -512,13 +512,13 @@ export class OperationsService implements OnModuleInit {
       }
       if (!imageUrl) {
         // fallback: 从数据库取已有图片
-        const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', vehicleId).eq('is_primary', 1).maybeSingle();
+        const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', vehicleId).eq('is_primary', true).maybeSingle();
         if (img) { imageUrl = img.url; objectKey = img.object_key || ''; }
       }
       await client.from('content_banners').insert({
         id, image_url: imageUrl, object_key: objectKey,
         title, link_type: linkType, link_target: linkTarget,
-        sort_order: i, enabled: 1, created_at: t, updated_at: t,
+        sort_order: i, enabled: true, created_at: t, updated_at: t,
       });
     }
   }
@@ -580,7 +580,7 @@ export class OperationsService implements OnModuleInit {
           try { imageUrl = await this.storage.getSignedUrl(tosKey, 31536000); } catch {}
         }
         if (!imageUrl) {
-          const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', cfg.vehicleId).eq('is_primary', 1).maybeSingle();
+          const { data: img } = await client.from('vehicle_images').select('url,object_key').eq('vehicle_id', cfg.vehicleId).eq('is_primary', true).maybeSingle();
           if (img) { imageUrl = img.url; objectKey = img.object_key || ''; }
         }
         if (!imageUrl) continue;
@@ -601,7 +601,7 @@ export class OperationsService implements OnModuleInit {
             id: cfg.id, image_url: imageUrl, object_key: objectKey, title: cfg.title,
             link_type: cfg.linkType, link_target: cfg.linkTarget,
             sort_order: cfg.id === 'b1' ? 0 : cfg.id === 'b2' ? 1 : 2,
-            enabled: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            enabled: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
           });
           console.log(`[Banner] Created ${cfg.id} with real vehicle image`);
         }
