@@ -87,13 +87,6 @@ export default function OrderDetailPage() {
 
   const handlePay = async () => {
     if (!order?.quote || paying) return
-    if (orderId.startsWith('demo-')) {
-      const updatedOrder = { ...order, status: 'paid' }
-      setOrder(updatedOrder)
-      primeOrderDetail(updatedOrder)
-      Taro.showToast({ title: '演示支付成功', icon: 'success' })
-      return
-    }
     setPaying(true)
     try {
       const result = await consumerRequest<Detail>({
@@ -109,14 +102,6 @@ export default function OrderDetailPage() {
   }
 
   const handleCancel = async () => {
-    if (orderId.startsWith('demo-')) {
-      const updatedOrder = { ...order, status: 'cancelled' }
-      setOrder(updatedOrder)
-      primeOrderDetail(updatedOrder)
-      setCancelDialogOpen(false)
-      Taro.showToast({ title: '演示订单已取消', icon: 'success' })
-      return
-    }
     try {
       const result = await consumerRequest<Detail>({ url: `/api/orders/${orderId}/cancel`, method: 'POST' })
       setOrder(result)

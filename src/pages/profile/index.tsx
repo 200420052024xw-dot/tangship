@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { consumerRequest } from '@/services/consumer-api'
+import { consumerRequest, ensureConsumerSession } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ORDER_INITIAL_TAB_KEY } from '@/constants/order-display'
@@ -16,13 +16,14 @@ type UserInfo = { nickname: string; openid: string }
 type OrderStats = { pendingPayment: number; pendingReview: number; active: number; completed: number; totalSpent: number }
 
 export default function ProfilePage() {
+  const [loggingIn, setLoggingIn] = useState(false)
   const { data: user, loading: loadingUser, refresh: refreshUser } = useSWR<UserInfo>(
-    'user-info-demo-v2', async () => {
+    'user-info', async () => {
       return await consumerRequest<UserInfo>({ url: '/api/auth/me' })
     }, 'session'
   )
   const { data: stats, refresh: refreshStats } = useSWR<OrderStats>(
-    'order-stats-demo-v2', async () => {
+    'order-stats', async () => {
       const result = await consumerRequest<OrderStats>({ url: '/api/orders/stats' })
       return result || { pendingPayment: 0, pendingReview: 0, active: 0, completed: 0, totalSpent: 0 }
     }, 'dynamic'
@@ -36,7 +37,19 @@ export default function ProfilePage() {
   const isLoggedIn = !!user?.openid
   const loading = loadingUser
 
-  const handleLogin = () => Taro.navigateTo({ url: '/pages/login/index' })
+  const handleLogin = async () => {
+    if (loggingIn) return
+    setLoggingIn(true)
+    try {
+      await ensureConsumerSession()
+      await refreshUser()
+      await refreshStats()
+    } catch {
+      Taro.showToast({ title: '登录失败，请重试', icon: 'none' })
+    } finally {
+      setLoggingIn(false)
+    }
+  }
 
   const handleUserClick = () => {
     if (!isLoggedIn) return handleLogin()
@@ -48,7 +61,7 @@ export default function ProfilePage() {
     if (!editName.trim()) return
     setSaving(true)
     try {
-      await consumerRequest({ url: '/api/auth/profile', method: 'PATCH', data: { nickname: editName.trim() } })
+      await consumerRequest({ url: '/api/auth/me', method: 'PATCH', data: { nickname: editName.trim() } })
       await refreshUser()
       setShowUserDialog(false)
       Taro.showToast({ title: '修改成功', icon: 'success' })
@@ -88,7 +101,7 @@ export default function ProfilePage() {
                 <Text className="block text-sm text-gray-400 mt-1">唐小识无人配送</Text>
               </>
             ) : (
-              <Text className="block text-lg font-semibold text-primary">微信快捷登录</Text>
+              <Text className="block text-lg font-semibold text-primary">{loggingIn ? '登录中...' : '微信快捷登录'}</Text>
             )}
           </View>
           <ChevronRight size={18} color="#9ca3af" />

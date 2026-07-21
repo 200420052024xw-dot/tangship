@@ -72,7 +72,7 @@ export default function OrdersPage() {
   const [deleting, setDeleting] = useState(false)
   const didShowOnceRef = useRef(false)
   const { data: orders, loading, refresh } = useSWR<Order[]>(
-    'my-orders-demo-v2',
+    'my-orders-v2',
     async () => {
       let raw: any[]
       const result = await consumerRequest<any[]>({ url: '/api/orders' })
@@ -154,14 +154,13 @@ export default function OrdersPage() {
     console.log('[Orders] handleDelete called, selectedIds:', [...selectedIds], 'size:', selectedIds.size, 'deleting:', deleting)
     if (!selectedIds.size || deleting) return
     const ids = [...selectedIds]
-    const realIds = ids.filter(id => !id.startsWith('demo-'))
     setDeleting(true)
     try {
-      if (realIds.length) {
+      if (ids.length) {
         await consumerRequest<{ deletedIds: string[] }>({
           url: '/api/orders/batch-delete',
           method: 'POST',
-          data: { ids: realIds },
+          data: { ids },
         })
       }
       setDeletedIds(current => new Set([...current, ...ids]))

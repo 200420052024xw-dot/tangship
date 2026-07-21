@@ -320,7 +320,7 @@ export class OrdersService {
       provider: 'mock', status: 'success', provider_trade_no: null, created_at: time, updated_at: time,
     });
     if (insertErr) throw new Error(`创建支付记录失败: ${insertErr.message}`);
-    await this.log(id, 'pending_payment', 'paid', 'user', userId, '模拟支付成功');
+    await this.log(id, 'pending_payment', 'paid', 'user', userId, '用户确认支付');
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }

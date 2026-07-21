@@ -48,7 +48,6 @@ export class AdminDataService implements OnModuleInit, OnModuleDestroy {
     this.seed();
     this.seedOperationalDemo();
     console.log(`[AdminData] SQLite mode: ${dbPath}`);
-    console.log(`[AdminData] Local login: ${process.env.LOCAL_ADMIN_USERNAME || 'wjf'} / ${process.env.LOCAL_ADMIN_PASSWORD || '123'}`);
   }
 
   onModuleDestroy() { this.db?.close(); }
@@ -413,58 +412,12 @@ export class AdminDataService implements OnModuleInit, OnModuleDestroy {
     db.transaction(() => {
       const localUsername = process.env.LOCAL_ADMIN_USERNAME || 'wjf';
       db.prepare('INSERT INTO admin_users (id,username,nickname,password_hash,role,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(adminId, localUsername, localUsername, hashPassword(process.env.LOCAL_ADMIN_PASSWORD || '123'), 'super_admin', 'active', t, t);
-      const users = [['local-user-001','local_openid_001','张师傅'],['local-user-002','local_openid_002','李女士'],['local-user-003','local_openid_003','测试企业']];
-      for (const [id, openid, nickname] of users) db.prepare('INSERT INTO users (id,openid,nickname,status,created_at,updated_at) VALUES (?,?,?,?,?,?)').run(id, openid, nickname, 'active', t, t);
-      const wechatAdminId = 'local-wechat-admin-003';
-      db.prepare('INSERT INTO admin_users (id,username,nickname,password_hash,role,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(wechatAdminId, 'wx_local-user-003', '测试运营', '', 'operator', 'active', t, t);
-      db.prepare('INSERT INTO admin_wechat_bindings (id,admin_user_id,user_id,granted_by,created_at,updated_at) VALUES (?,?,?,?,?,?)').run('local-binding-003', wechatAdminId, 'local-user-003', adminId, t, t);
-      const vehicles = [
-        { id:'z5-2026', name:'Z5', fullName:'Z5 城市配送车', mode:'single', fee:500, order:0 },
-        { id:'z8-max', name:'Z8Max', fullName:'Z8Max 大型配送车', mode:'single', fee:1000, order:1 },
-        { id:'z5-monthly', name:'Z5 包月', fullName:'Z5 企业包月专线', mode:'monthly', fee:0, order:2 },
-        { id:'z8-rental', name:'Z8 租购', fullName:'Z8 企业租购方案', mode:'rental', fee:0, order:3 },
-      ];
-      for (const v of vehicles) db.prepare(`INSERT INTO vehicle_catalog (id,name,full_name,subtitle,description,specs_json,scenes_json,restrictions_json,modes_json,service_mode,pricing_hint_json,tags_json,enabled,requires_approval,sort_order,total_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(v.id,v.name,v.fullName,'本地演示车型','用于管理员端 SQLite 测试',JSON.stringify({maxLoadKg:500,maxRangeKm:120}),JSON.stringify(['城市配送']),JSON.stringify(['禁止危险品']),JSON.stringify([v.mode]),v.mode,JSON.stringify({startFrom:(2500+v.fee)/100,description:'最终价格由后台审核确认'}),JSON.stringify(['演示']),1,0,v.order,v.mode === 'single' ? 6 : 0,t,t);
-      const statuses = ['pending_review','pending_review','pending_payment','rejected','paid','completed'];
-      statuses.forEach((status, index) => {
-        const id = `local-order-${index + 1}`, userId = users[index % users.length][0], vehicleId = vehicles[index % 2].id, created = new Date(Date.now() - index * 86400000).toISOString();
-        db.prepare(`INSERT INTO orders (id,order_no,user_id,vehicle_id,status,pickup_type,scheduled_at,idempotency_key,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id,`LOCAL${String(index+1).padStart(6,'0')}`,userId,vehicleId,status,'door',new Date(Date.now()+86400000).toISOString(),`seed-${index}`,created,created);
-        db.prepare(`INSERT INTO order_addresses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(),id,'sender',users[index % users.length][2],`1380000${String(index).padStart(4,'0')}`,'上海市','上海市','浦东新区','演示发货点','上海市浦东新区演示路 1 号','1 楼',121.5,31.2);
-        db.prepare(`INSERT INTO order_addresses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(),id,'receiver','收货联系人',`1390000${String(index).padStart(4,'0')}`,'上海市','上海市','徐汇区','演示收货点','上海市徐汇区测试路 8 号','8 楼',121.4,31.18);
-        db.prepare(`INSERT INTO order_items (id,order_id,category,name,quantity,estimated_weight_kg,fragile,oversized,need_carry) VALUES (?,?,?,?,?,?,?,?,?)`).run(randomUUID(),id,'general','演示货物',2,120,0,0,1);
-        if (status !== 'pending_review') db.prepare(`INSERT INTO order_status_logs VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(),id,'pending_review',status,'admin',adminId,'演示状态变更',created);
-        if (status === 'pending_payment') {
-          db.prepare(`UPDATE orders SET reviewed_by=?,reviewed_at=? WHERE id=?`).run(adminId, created, id);
-          db.prepare(`INSERT INTO order_quotes (id,order_id,base_fee_cents,distance_fee_cents,vehicle_fee_cents,service_fee_cents,discount_cents,total_cents,distance_meters,expires_at,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(),id,2500,400,500,0,0,3400,4000,new Date(Date.now()+86400000).toISOString(),adminId,created);
-          db.prepare(`INSERT INTO audit_logs VALUES (?,?,?,?,?,?,?)`).run(randomUUID(),adminId,'order.approve','order',id,JSON.stringify({totalCents:3400}),created);
-        }
-        if (status === 'rejected') {
-          db.prepare(`UPDATE orders SET reviewed_by=?,reviewed_at=?,rejection_reason=? WHERE id=?`).run(adminId, created, '演示订单信息不完整', id);
-          db.prepare(`INSERT INTO audit_logs VALUES (?,?,?,?,?,?,?)`).run(randomUUID(),adminId,'order.reject','order',id,JSON.stringify({rejectionReason:'演示订单信息不完整'}),created);
-        }
-      });
-      db.prepare(`INSERT INTO content_banners VALUES (?,?,?,?,?,?,?,?,?,?)`).run('local-banner-1','','','SQLite 本地演示轮播','vehicle','z5-2026',0,1,t,t);
       db.prepare(`INSERT INTO pricing_rule_versions (id,version,status,config_json,created_by,published_by,created_at,updated_at,published_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(randomUUID(),1,'published',JSON.stringify(DEFAULT_PRICING),adminId,adminId,t,t,t);
-      db.prepare(`INSERT INTO inquiries VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run('local-inquiry-1','monthly','z5-monthly',JSON.stringify({address:'上海浦东'}),JSON.stringify({address:'上海徐汇'}),'日用品','每周一至周五',20,'王经理','13600001111','演示企业',null,'pending',null,t,t);
-      db.prepare(`INSERT INTO inquiries VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run('local-inquiry-2','rental','z8-rental',null,null,null,null,null,'陈女士','13700002222','测试公司','希望了解年度租购方案','contacted','已电话沟通',t,t);
-      db.prepare(`INSERT INTO contact_settings VALUES (?,?,?,?,?,?,?)`).run('local-contact','400-888-9999','tangship-service','service@example.test','工作日 9:00-18:00','本地演示数据，不代表线上配置',t);
-      this.insertSqliteNotification('new_order', '有新的按趟订单待审核', '2 个按趟订单等待审核，请及时查看详情。', '/orders?status=pending_review', t);
-      this.insertSqliteNotification('new_inquiry', '有新的包月咨询', '王经理提交了包月专线需求，请及时联系。', '/inquiries/monthly', t);
     })();
   }
 
   private seedOperationalDemo() {
-    const db = this.sqlite(), timestamp = now();
-    db.transaction(() => {
-      db.prepare(`UPDATE vehicle_catalog SET total_count=6 WHERE id IN ('z5-2026','z8-max') AND total_count=0`).run();
-      db.prepare(`UPDATE admin_users SET nickname=username WHERE nickname=''`).run();
-      db.prepare(`UPDATE orders SET reserved_vehicle_count=1 WHERE status IN ('pending_payment','paid','dispatching','delivering') AND reserved_vehicle_count=0`).run();
-      const notificationCount = Number((db.prepare('SELECT count(*) total FROM admin_notifications').get() as any).total);
-      if (!notificationCount) {
-        this.insertSqliteNotification('new_order', '有新的按趟订单待审核', '2 个按趟订单等待审核，请及时查看详情。', '/orders?status=pending_review', timestamp);
-        this.insertSqliteNotification('new_inquiry', '有新的客户咨询', '包月或租购咨询等待联系。', '/inquiries/monthly', timestamp);
-      }
-    })();
+    // No-op: demo data removed for production readiness
   }
 
   private insertOrderLogs(db: SqliteDb, adminId: string, orderId: string, from: string, to: string, action: string, detail: any, createdAt: string) {

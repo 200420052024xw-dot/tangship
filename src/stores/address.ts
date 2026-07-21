@@ -42,10 +42,6 @@ export const useAddressStore = create<AddressStore>((set, get) => ({
     } finally { set({ loading: false }) }
   },
   saveAddress: async address => {
-    if (address.id.startsWith('demo-')) {
-      set(state => ({ addressList: state.addressList.map(row => row.id === address.id ? address : row) }))
-      return address
-    }
     try {
       const saved = fromApi(await consumerRequest<any>({ url: address.id.startsWith('addr_') ? '/api/addresses' : `/api/addresses/${address.id}`, method: address.id.startsWith('addr_') ? 'POST' : 'PUT', data: toApi(address) }))
       await get().loadAddresses()
@@ -56,10 +52,6 @@ export const useAddressStore = create<AddressStore>((set, get) => ({
     }
   },
   removeAddress: async id => {
-    if (id.startsWith('demo-')) {
-      set(state => ({ addressList: state.addressList.filter(row => row.id !== id) }))
-      return
-    }
     await consumerRequest({ url: `/api/addresses/${id}`, method: 'DELETE' })
     await get().loadAddresses()
   },

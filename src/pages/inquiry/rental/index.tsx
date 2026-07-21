@@ -57,7 +57,7 @@ const RentalInquiryPage: FC = () => {
     } catch (err) {
       console.error('[RentalInquiry] error:', err)
       setShowContact(true)
-      Taro.showToast({ title: '已使用演示数据提交', icon: 'none' })
+      Taro.showToast({ title: '提交失败，请稍后重试', icon: 'none' })
     } finally {
       setSubmitting(false)
     }

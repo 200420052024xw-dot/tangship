@@ -9,7 +9,6 @@
  * 不再做:
  * - 完整下单流程(交给 pages/order/create)
  * - 弹窗式车型选择(交给 pages/vehicle/detail)
- * - 模拟创建订单
  */
 
 import { Image, View, Text, Swiper, SwiperItem } from '@tarojs/components'
@@ -37,13 +36,13 @@ const IndexPage: FC = () => {
   const [openingVehicleId, setOpeningVehicleId] = useState<string | null>(null)
   const navigatingRef = useRef(false)
   const { data: catalog, loading: loadingCatalog } = useSWR<Vehicle[]>(
-    `vehicles-demo-v2-${activeTab}`, async () => {
+    `vehicles-v2-${activeTab}`, async () => {
       const result = await consumerRequest<Vehicle[]>({ url: `/api/content/vehicles?mode=${activeTab}` })
       return result || []
     }, 'static'
   )
   const { data: banners } = useSWR<BannerItem[]>(
-    'banners-demo-v2', async () => {
+    'banners-v2', async () => {
       const result = await consumerRequest<BannerItem[]>({ url: '/api/content/banners' })
       return result || []
     }, 'static'
