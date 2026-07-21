@@ -58,6 +58,11 @@ export const useDataCache = create<DataCacheStore>((set, get) => ({
       const raw = Taro.getStorageSync(`dc_${key}`)
       if (raw) {
         const parsed = JSON.parse(raw) as CacheEntry<unknown>
+        // 空数组不恢复，强制重新请求
+        if (Array.isArray(parsed.data) && parsed.data.length === 0) {
+          Taro.removeStorageSync(`dc_${key}`)
+          return
+        }
         set(s => ({ entries: { ...s.entries, [key]: parsed } }))
       }
     } catch { /* ignore */ }
@@ -132,7 +137,10 @@ export function useSWR<T>(
     if (mountedRef.current) setError(null)
     try {
       const result = await fn()
-      useDataCache.getState().set(fetchKey, result, category === 'static')
+      // static 类别（车型/轮播图）空数组不缓存，避免空结果长期占位导致页面空白
+      const isEmptyArray = Array.isArray(result) && result.length === 0
+      const shouldPersist = category === 'static' && !isEmptyArray
+      useDataCache.getState().set(fetchKey, result, shouldPersist)
       if (mountedRef.current) {
         setData(result)
         setError(null)
