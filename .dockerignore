@@ -1,0 +1,49 @@
+# 容器构建时排除,加快构建、减小镜像
+
+# 仓库元数据
+.git
+.gitignore
+.github
+.cozeproj
+.idea
+.vscode
+
+# 文档 / 规格
+*.md
+docs/
+specs/
+assets/INTEGRATION.md
+
+# 所有源码 / 构建产物 / 测试 / 日志
+node_modules
+.pnpm-store
+dist
+dist-*
+server/dist
+server/node_modules
+admin-web/dist
+admin-web/node_modules
+.swc
+.taro
+
+# 环境 / 密钥 / 凭据
+.env
+.env.local
+.env.*.local
+*.log
+.admin-*.log
+.run-*.log
+.server-dev.*
+.web-dev.*
+
+# 不必要的产物
+.taro_cache
+.vite
+.DS_Store
+*.tsbuildinfo
+project.private.config.json
+
+# 部署相关(避免循环引用)
+Dockerfile
+.dockerignore
+cloudbase/
