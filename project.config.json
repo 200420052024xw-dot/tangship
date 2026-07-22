@@ -7,7 +7,7 @@
     "urlCheck": false,
     "es6": false,
     "enhance": false,
-    "compileHotReLoad": false,
+    "compileHotReLoad": true,
     "postcss": false,
     "minified": false,
     "compileWorklet": false,
@@ -31,12 +31,7 @@
   },
   "compileType": "miniprogram",
   "packOptions": {
-    "ignore": [
-      {
-        "value": "./assets",
-        "type": "folder"
-      }
-    ],
+    "ignore": [],
     "include": []
   },
   "simulatorPluginLibVersion": {},

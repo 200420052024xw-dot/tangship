@@ -763,14 +763,14 @@ create(@Body() body: unknown) {
 ```
 # 数据持久化
 
-扣子生产环境和微信小程序业务使用 Supabase。SQLite 仅作为管理员后台的本地演示数据源，不能在生产环境启用，也不提供向 Supabase 导入本地测试记录的能力。
+项目在本地、扣子生产环境和微信小程序业务中统一使用 Supabase。请在 `.env.local` 配置 `COZE_SUPABASE_URL`、`COZE_SUPABASE_ANON_KEY`，服务端管理操作建议同时配置 `COZE_SUPABASE_SERVICE_ROLE_KEY`。
 
-运行 `pnpm dev:admin:local` 可自动创建 `server/data/admin-local.sqlite`，并同时启动 NestJS 后端和管理员前端。默认本地账号为 `wjf / 123`；运行 `pnpm db:admin:reset` 可清空演示库，下次启动会重新建表和填充数据。扣子部署迁移步骤见 `docs/coze-admin-migration-handoff.md`。
+运行 `pnpm dev:admin:local` 会同时启动 NestJS 后端和管理员前端，所有读写直接进入已配置的 Supabase 项目。
 
 ## 独立管理员后台
 
 `admin-web/` 是独立 React + TypeScript + Vite 应用，不属于消费者小程序。本地完整测试使用 `pnpm dev:admin:local`；仅启动前端可使用 `pnpm dev:admin`。生产构建会把管理员资源写入 `server/dist/public/admin` 并由 NestJS 同源提供 `/admin/`。通过 `VITE_API_BASE_URL` 指向共用 NestJS API；同源部署时可留空。后端使用 `ADMIN_ALLOWED_ORIGINS` 限制允许携带管理员 Cookie 的后台来源。
 
-管理端后续开发遵循“脱离扣子也能完整实现和测试、线上适配保持可迁移”的原则：业务页面、API 契约、校验和权限不直接依赖扣子 SDK；新功能先完成 SQLite 本地实现，再补 Supabase/TOS 适配与迁移文件。
+管理端后续开发遵循“脱离扣子也能完整实现和测试、线上适配保持可迁移”的原则：业务页面、API 契约、校验和权限不直接依赖扣子 SDK；数据统一通过 Supabase，图片和视频统一通过 TOS。
 
-管理员角色为 `super_admin`、`operator`、`finance`。前两者可以查看和审核订单，finance 只能查看脱敏个人信息、价格和支付信息，不能审核。线上管理员仍由 Supabase 环境变量和初始化流程管理，本地演示账号只在 `ADMIN_DATA_BACKEND=sqlite` 且非生产环境时有效。
+管理员角色为 `super_admin`、`operator`、`finance`。前两者可以查看和审核订单，finance 只能查看脱敏个人信息、价格和支付信息，不能审核。管理员账号由 Supabase 环境变量和初始化流程统一管理。

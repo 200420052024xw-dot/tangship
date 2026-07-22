@@ -15,7 +15,7 @@ export default defineAppConfig({
   ],
   subPackages: [{
     root: 'pages-admin',
-    pages: ['dashboard/index', 'orders/index', 'order-detail/index', 'reviews/index', 'inquiries/index', 'notifications/index', 'settings/index']
+    pages: ['dashboard/index', 'orders/index', 'order-detail/index', 'reviews/index', 'inquiries/index', 'notifications/index', 'settings/index', 'admins/index']
   }],
   window: {
     backgroundTextStyle: 'light',

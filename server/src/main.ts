@@ -8,9 +8,12 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { SupabaseService } from '@/supabase/supabase.service';
 import { seedSupabase } from '@/supabase/seed';
-import { AdminDataService } from '@/admin-data/admin-data.service';
 
-for (const candidate of [resolve(process.cwd(), '.env.local'), resolve(process.cwd(), '../.env.local')]) {
+for (const candidate of [
+  resolve(process.cwd(), '.env.local'),
+  resolve(process.cwd(), '../.env.local'),
+  resolve(process.cwd(), '../../.env.local'),
+]) {
   if (existsSync(candidate)) {
     loadEnv({ path: candidate, override: false });
     break;
@@ -52,8 +55,11 @@ async function bootstrap() {
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
   // Serve admin-web static files
-  const adminDist = resolve(process.cwd(), 'public/admin');
-  if (existsSync(adminDist)) {
+  const adminDist = [
+    resolve(process.cwd(), 'public/admin'),
+    resolve(process.cwd(), 'dist/public/admin'),
+  ].find((candidate) => existsSync(resolve(candidate, 'index.html')));
+  if (adminDist) {
     app.useStaticAssets(adminDist, { prefix: '/admin/' });
     // SPA fallback for client-side routing
     const expressApp = app.getHttpAdapter().getInstance() as express.Express;
@@ -68,11 +74,8 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   // Seed database on startup
-  const adminData = app.get(AdminDataService);
-  if (!adminData.isSqlite) {
-    const supabaseService = app.get(SupabaseService);
-    await seedSupabase(supabaseService);
-  }
+  const supabaseService = app.get(SupabaseService);
+  await seedSupabase(supabaseService);
 
   const port = parsePort();
   try {

@@ -22,11 +22,11 @@
 - 扩展车型读写契约：`totalCount`、`reservedCount`、`availableCount`。
 - `POST /api/admin/orders/:id/status` 推进履约状态，接收 `status`、`note`、`vehicleCount`、`vehiclePlate`；完成暂不强制凭证。
 - `GET /api/admin/notifications`、`PUT /api/admin/notifications/:id/read`、`PUT /api/admin/notifications/read-all`。
-- 保持 `{ code, msg, data }` 信封；SQLite 与 Supabase 共用字段名称。
+- 保持 `{ code, msg, data }` 信封；数据库字段与 Supabase 表结构一致。
 
 ## 迁移与通知
 
-- SQLite 启动迁移使用列存在性检查，兼容已生成的本地库；Supabase 使用幂等 SQL 增列、建表和索引。
-- 本地通知只写入通知表；微信提醒通过独立适配器预留，未配置线上凭据时不影响站内通知。
+- Supabase 使用幂等 SQL 增列、建表和索引。
+- 站内通知写入 Supabase 通知表；微信提醒通过独立适配器预留，未配置线上凭据时不影响站内通知。
 - 图片仍由 TOS 管理；当前订单完成流程不要求上传凭证，后续恢复时必须继续使用 TOS URL。
 - 参考路线距离由前端使用地址快照坐标的 Haversine 距离乘城市道路修正系数计算，作为可编辑建议值；未配置地图路线 API 时不宣称为精确导航里程。

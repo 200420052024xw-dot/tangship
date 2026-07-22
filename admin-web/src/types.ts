@@ -23,11 +23,15 @@ export interface OrderRow {
   created_at?: string
   vehicleId: string
   scheduledAt?: string
+  scheduledEndAt?: string
+  pickup_type?: 'immediate' | 'scheduled'
   status: string
   contactName: string
   phone: string
   senderDistrict: string
+  senderCity?: string
   receiverDistrict: string
+  receiverCity?: string
   reviewer?: string
   reserved_vehicle_count?: number
 }
@@ -35,9 +39,13 @@ export interface OrderRow {
 export interface VehicleCapacity {
   id: string
   name: string
+  imageUrl: string
   totalCount: number
+  onlineReservedCount: number
+  manualReservedCount: number
   reservedCount: number
   availableCount: number
+  insufficient?: boolean
 }
 
 export interface DashboardData {
@@ -50,10 +58,12 @@ export interface DashboardData {
   rejected: number
   pendingMonthly: number
   pendingRental: number
-  unreadNotifications: number
+  appointmentSummary: { dueSoon: number; todayTotal: number }
   recentPending: OrderRow[]
   vehicleCapacity: VehicleCapacity[]
 }
+
+export type AppointmentRow = OrderRow
 
 export interface OrderAddress {
   id: string
@@ -73,6 +83,7 @@ export interface OrderAddress {
 export interface OrderItem {
   id: string
   category: string
+  categoryLabel?: string
   name: string
   quantity: number
   estimated_weight_kg: number
@@ -115,6 +126,11 @@ export interface OrderDetailData {
   created_at: string
   vehicle_id: string
   scheduled_at?: string
+  scheduled_end_at?: string
+  pickup_type?: 'immediate' | 'scheduled'
+  reviewed_at?: string
+  dispatched_at?: string
+  completed_at?: string
   customer_remark?: string
   reviewer?: string
   reserved_vehicle_count?: number
@@ -147,6 +163,12 @@ export interface AdminNotification {
   type: string
   title: string
   content: string
+  orderId?: string
+  orderNo?: string
+  senderName?: string
+  senderPhone?: string
+  status?: string
+  statusLabel?: string
   targetPath?: string
   readAt?: string
   createdAt: string

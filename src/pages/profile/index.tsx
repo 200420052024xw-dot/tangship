@@ -1,6 +1,6 @@
 import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { ChevronRight, CircleCheck, CircleUser, ClipboardCheck, MapPinHouse, Package, Ticket, Truck, Wallet } from 'lucide-react-taro'
+import { ChevronRight, CircleCheck, CircleUser, ClipboardCheck, MapPinHouse, MessageCircle, Ticket, Truck, Wallet } from 'lucide-react-taro'
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,6 +11,7 @@ import { consumerRequest, ensureConsumerSession } from '@/services/consumer-api'
 import { useSWR } from '@/stores/data-cache'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ORDER_INITIAL_TAB_KEY } from '@/constants/order-display'
+import { ContactPopup } from '@/components/inquiry/ContactPopup'
 
 type UserInfo = { nickname: string; openid: string }
 type OrderStats = { pendingPayment: number; pendingReview: number; active: number; completed: number; totalSpent: number }
@@ -31,6 +32,7 @@ export default function ProfilePage() {
   const [showUserDialog, setShowUserDialog] = useState(false)
   const [editName, setEditName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showContact, setShowContact] = useState(false)
 
   useDidShow(() => { refreshUser(); refreshStats() })
 
@@ -143,7 +145,7 @@ export default function ProfilePage() {
       {/* 菜单 */}
       <Card className="mx-4 mt-3">
         <CardContent className="p-0">
-          <MenuRow icon={<Package size={19} color="#2088D8" />} label="我的订单" onClick={() => openOrders('all')} />
+          <MenuRow icon={<MessageCircle size={19} color="#2088D8" />} label="联系客服" onClick={() => setShowContact(true)} />
           <MenuRow icon={<MapPinHouse size={19} color="#2088D8" />} label="地址簿" onClick={() => Taro.navigateTo({ url: '/pages/address/list/index' })} />
           <View className="flex flex-row items-center justify-between px-5 py-4" onClick={() => Taro.showToast({ title: '暂未开放', icon: 'none' })}>
             <View className="flex flex-row items-center gap-3">
@@ -190,6 +192,7 @@ export default function ProfilePage() {
           </DialogContent>
         </Dialog>
       )}
+      <ContactPopup open={showContact} onClose={() => setShowContact(false)} title="联系客服" description="订单咨询、调度和取消申请，请通过以下方式联系我们" showSuccessIcon={false} />
     </View>
   )
 }

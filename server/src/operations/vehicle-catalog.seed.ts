@@ -338,6 +338,7 @@ export const CANONICAL_VEHICLES = [
       "maxRangeKm": 110,
       "speedKmh": "20-30",
       "chargeTime": "3小时快充",
+      "supportsRefrigeration": true,
       "temperatureRange": "-18°C ~ +8°C"
     },
     "applicableScenes": [
@@ -399,6 +400,7 @@ export const CANONICAL_VEHICLES = [
       "maxRangeKm": 180,
       "speedKmh": "25-35",
       "chargeTime": "4.5小时快充",
+      "supportsRefrigeration": true,
       "temperatureRange": "-18°C ~ +8°C"
     },
     "applicableScenes": [

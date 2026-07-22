@@ -72,27 +72,8 @@ const IndexPage: FC = () => {
 
   /** 轮播图点击 */
   const handleBannerClick = (banner: BannerItem) => {
-    switch (banner.linkType) {
-      case 'vehicle': {
-        const target = (catalog || []).find(v => v.id === banner.linkTarget)
-        if (target) {
-          handleVehicleClick(target)
-        } else {
-          Taro.showToast({ title: '活动详情页开发中', icon: 'none' })
-        }
-        break
-      }
-      case 'monthly':
-        setActiveTab('monthly')
-        break
-      case 'service':
-        setActiveTab('rental')
-        break
-      case 'activity':
-      default:
-        Taro.showToast({ title: '活动详情页开发中', icon: 'none' })
-        break
-    }
+    if (!banner.image) return
+    Taro.previewImage({ current: banner.image, urls: visibleBanners.map(item => item.image).filter(Boolean) })
   }
 
   return (

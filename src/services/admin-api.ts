@@ -5,6 +5,9 @@ import { consumerToken } from './consumer-api'
 const ADMIN_TOKEN_KEY = 'admin_session_token'
 const ADMIN_INFO_KEY = 'admin_session_info'
 interface Envelope<T> { code: number; msg: string; message?: string; data: T }
+type AdminCacheEntry = { value: unknown; updatedAt: number }
+const adminResponseCache = new Map<string, AdminCacheEntry>()
+const adminPendingRequests = new Map<string, Promise<unknown>>()
 export type AdminInfo = { id: string; username: string; role: 'super_admin' | 'operator' | 'finance' }
 export function getAdminInfo() { return Taro.getStorageSync(ADMIN_INFO_KEY) as AdminInfo | undefined }
 export async function exchangeAdminSession() {
@@ -17,11 +20,28 @@ export async function exchangeAdminSession() {
 export async function adminRequest<T>(options: Parameters<typeof Network.request>[0]): Promise<T> {
   const token = String(Taro.getStorageSync(ADMIN_TOKEN_KEY) || '')
   if (!token) throw new Error('管理员未登录')
-  const response = await Network.request({ ...options, header: { ...(options.header || {}), Authorization: `Bearer ${token}` } })
-  const body = response.data as Envelope<T>
-  if (response.statusCode === 401 || response.statusCode === 403) { clearAdminSession(); throw new Error(body?.msg || body?.message || '管理员会话已失效') }
-  if (response.statusCode < 200 || response.statusCode >= 300 || body?.code !== 200) { const error = new Error(body?.msg || body?.message || `请求失败（${response.statusCode}）`) as Error & { statusCode?: number }; error.statusCode = response.statusCode; throw error }
-  return body.data
+  const method = String(options.method || 'GET').toUpperCase()
+  const cacheKey = String(options.url || '')
+  if (method === 'GET') {
+    const cached = adminResponseCache.get(cacheKey)
+    if (cached && Date.now() - cached.updatedAt < 30_000) return cached.value as T
+    const pending = adminPendingRequests.get(cacheKey)
+    if (pending) return pending as Promise<T>
+  }
+  const request = (async () => {
+    const response = await Network.request({ ...options, header: { ...(options.header || {}), Authorization: `Bearer ${token}` } })
+    const body = response.data as Envelope<T>
+    if (response.statusCode === 401 || response.statusCode === 403) { clearAdminSession(); throw new Error(body?.msg || body?.message || '管理员会话已失效') }
+    if (response.statusCode < 200 || response.statusCode >= 300 || body?.code !== 200) { const error = new Error(body?.msg || body?.message || `请求失败（${response.statusCode}）`) as Error & { statusCode?: number }; error.statusCode = response.statusCode; throw error }
+    if (method === 'GET') adminResponseCache.set(cacheKey, { value: body.data, updatedAt: Date.now() })
+    else adminResponseCache.clear()
+    return body.data
+  })()
+  if (method === 'GET') {
+    adminPendingRequests.set(cacheKey, request)
+    request.finally(() => adminPendingRequests.delete(cacheKey)).catch(() => undefined)
+  }
+  return request
 }
 /** 管理员上传文件（携带 Bearer token） */
 export async function adminUploadFile(options: { url: string; filePath: string; name?: string; formData?: Record<string, string> }): Promise<{ url: string; objectKey: string }> {
@@ -40,5 +60,5 @@ export async function adminUploadFile(options: { url: string; filePath: string; 
   return body.data as { url: string; objectKey: string }
 }
 
-export function clearAdminSession() { Taro.removeStorageSync(ADMIN_TOKEN_KEY); Taro.removeStorageSync(ADMIN_INFO_KEY) }
+export function clearAdminSession() { adminResponseCache.clear(); adminPendingRequests.clear(); Taro.removeStorageSync(ADMIN_TOKEN_KEY); Taro.removeStorageSync(ADMIN_INFO_KEY) }
 export async function logoutAdmin() { try { await adminRequest({ url: '/api/admin/auth/logout', method: 'POST' }) } finally { clearAdminSession() } }

@@ -11,6 +11,17 @@ export const DEFAULT_PRICING = {
   coldChainFeeCents: 1500, overweightFeePerKgCents: 50, overweightThresholdKg: 300,
   nightFeeCents: 1000, nightStartHour: 22, nightEndHour: 6,
   remoteAreaFeeCents: 2000, remoteAreas: [], defaultQuoteValidityHours: 24,
+  vehicleRules: {},
+};
+
+const PRICING_NUMBER_FIELDS = [
+  'baseDistanceMeters', 'baseFeeCents', 'distanceFeePerKmCents', 'coldChainFeeCents',
+  'overweightFeePerKgCents', 'overweightThresholdKg', 'nightFeeCents',
+  'remoteAreaFeeCents', 'defaultQuoteValidityHours',
+] as const;
+
+type PricingRule = typeof DEFAULT_PRICING & {
+  vehicleRules?: Record<string, Partial<typeof DEFAULT_PRICING>>;
 };
 
 const json = (v: any) => JSON.stringify(v);
@@ -42,7 +53,6 @@ export class OperationsService implements OnModuleInit {
   private getClient() { return this.supabase.getClient(); }
 
   async onModuleInit() {
-    if (process.env.ADMIN_DATA_BACKEND === 'sqlite') return;
     const client = this.getClient();
     const t = utc();
 
@@ -94,7 +104,7 @@ export class OperationsService implements OnModuleInit {
 
   async listVehicles(admin = false, serviceMode?: string) {
     const cacheKey = (admin ? CACHE_KEYS.VEHICLE_CATALOG + ':admin' : CACHE_KEYS.VEHICLE_CATALOG) + (serviceMode ? `:${serviceMode}` : '');
-    const cached = admin ? undefined : serverCache.get<any[]>(cacheKey);
+    const cached = serverCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
     const client = this.getClient();
@@ -102,10 +112,11 @@ export class OperationsService implements OnModuleInit {
     let query = client.from('vehicle_catalog').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
     if (!admin) query = query.eq('enabled', true);
     if (serviceMode) query = query.eq('service_mode', serviceMode);
-    const [{ data: rows, error }, { data: allImgs }, { data: activeOrders }] = await Promise.all([
+    const [{ data: rows, error }, { data: allImgs }, { data: activeOrders }, { data: publishedPricing }] = await Promise.all([
       query,
       client.from('vehicle_images').select('id, vehicle_id, url, object_key, is_primary, sort_order').order('is_primary', { ascending: false }).order('sort_order', { ascending: true }).order('id', { ascending: true }),
       admin ? client.from('orders').select('vehicle_id,reserved_vehicle_count').in('status', ['pending_payment', 'paid', 'dispatching', 'delivering']) : Promise.resolve({ data: [] }),
+      client.from('pricing_rule_versions').select('config_json').eq('status', 'published').order('version', { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (error) throw new Error(`查询车型失败: ${error.message}`);
 
@@ -132,21 +143,38 @@ export class OperationsService implements OnModuleInit {
 
     const reservedByVehicle = new Map<string, number>();
     for (const order of activeOrders || []) reservedByVehicle.set(order.vehicle_id, (reservedByVehicle.get(order.vehicle_id) || 0) + Number(order.reserved_vehicle_count || 0));
+    const variantsByBase = new Map<string, Partial<Record<VehicleServiceMode, string>>>();
+    for (const row of rows || []) {
+      const rowMode = (row.service_mode || 'single') as VehicleServiceMode;
+      const baseId = String(row.id).replace(/-(monthly|rental)$/i, '');
+      variantsByBase.set(baseId, { ...(variantsByBase.get(baseId) || {}), [rowMode]: row.id });
+    }
+    const publishedConfig = (publishedPricing?.config_json ? parse(publishedPricing.config_json) : DEFAULT_PRICING) as PricingRule;
     const result = (rows || []).map((v: any) => {
-      const totalCount = Math.max(0, Number(v.total_count) || 0), reservedCount = reservedByVehicle.get(v.id) || 0;
+      const parsedSpecs = parse(v.specs_json);
+      const totalCount = Math.max(0, Number(v.total_count ?? parsedSpecs._adminTotalCount ?? 1));
+      const onlineReservedCount = reservedByVehicle.get(v.id) || 0;
+      const manualReservedCount = Math.max(0, Number(parsedSpecs.manualReservedCount ?? 0));
+      const reservedCount = onlineReservedCount + manualReservedCount;
+      const baseId = String(v.id).replace(/-(monthly|rental)$/i, '');
+      const storedPricing = parse(v.pricing_hint_json);
+      const effectivePricing = this.effectivePricing(publishedConfig, v.id);
+      const pricingDescription = (v.service_mode || 'single') === 'single'
+        ? { ...storedPricing, startFrom: effectivePricing.baseFeeCents / 100, includedKm: effectivePricing.baseDistanceMeters / 1000, description: '' }
+        : storedPricing;
       return {
         id: v.id, name: v.name, fullName: v.full_name, subtitle: v.subtitle,
         description: v.description, enabled: !!v.enabled, requiresApproval: !!v.requires_approval,
-        sortOrder: v.sort_order, specs: parse(v.specs_json), applicableScenes: parse(v.scenes_json),
+        sortOrder: v.sort_order, specs: parsedSpecs, applicableScenes: parse(v.scenes_json),
         restrictions: parse(v.restrictions_json), supportedModes: parse(v.modes_json),
         serviceMode: v.service_mode || 'single',
-        pricingDescription: parse(v.pricing_hint_json), tags: parse(v.tags_json),
-        ...(admin ? { totalCount, reservedCount, availableCount: totalCount - reservedCount, imageItems: imageItemMap.get(v.id) || [] } : {}),
+        pricingDescription, tags: parse(v.tags_json),
+        ...(admin ? { totalCount, onlineReservedCount, manualReservedCount, reservedCount, availableCount: Math.max(0, totalCount - reservedCount), imageItems: imageItemMap.get(v.id) || [], serviceVariants: variantsByBase.get(baseId) || {} } : {}),
         images: imgMap.get(v.id) || [],
       };
     });
 
-    if (!admin) serverCache.set(cacheKey, result, CACHE_TTL.STATIC);
+    serverCache.set(cacheKey, result, admin ? CACHE_TTL.DYNAMIC : CACHE_TTL.STATIC);
     return result;
   }
 
@@ -162,23 +190,32 @@ export class OperationsService implements OnModuleInit {
     const t = utc();
     const { data: exists } = await client.from('vehicle_catalog').select('id').eq('id', id).maybeSingle();
 
+    const requestedTotalCount = b.totalCount === undefined ? 1 : Math.max(0, Math.floor(Number(b.totalCount) || 0));
     const values = {
       name: b.name, full_name: b.fullName, subtitle: b.subtitle || '',
-      description: b.description || '', specs_json: json(b.specs || {}),
+      description: b.description || '', specs_json: json({ ...(b.specs || {}), _adminTotalCount: requestedTotalCount }),
       scenes_json: json(b.applicableScenes || []), restrictions_json: json(b.restrictions || []),
       modes_json: json(b.supportedModes || ['single']), service_mode: b.serviceMode || 'single',
       pricing_hint_json: json(b.pricingDescription || {}),
       tags_json: json(b.tags || []), enabled: b.enabled === false ? false : true,
       requires_approval: b.requiresApproval ? true : false, sort_order: Number(b.sortOrder) || 0,
-      total_count: Math.max(0, Math.floor(Number(b.totalCount) || 0)), updated_at: t,
+      total_count: requestedTotalCount, updated_at: t,
     };
 
     if (exists) {
       const { error } = await client.from('vehicle_catalog').update(values).eq('id', id);
-      if (error) throw new BadRequestException(`保存车型失败: ${error.message}`);
+      if (error && /total_count/i.test(error.message)) {
+        const { total_count: _ignored, ...compatibleValues } = values;
+        const { error: compatibleError } = await client.from('vehicle_catalog').update(compatibleValues).eq('id', id);
+        if (compatibleError) throw new BadRequestException(`保存车型失败: ${compatibleError.message}`);
+      } else if (error) throw new BadRequestException(`保存车型失败: ${error.message}`);
     } else {
       const { error } = await client.from('vehicle_catalog').insert({ id, ...values, created_at: t });
-      if (error) throw new BadRequestException(`新增车型失败: ${error.message}`);
+      if (error && /total_count/i.test(error.message)) {
+        const { total_count: _ignored, ...compatibleValues } = values;
+        const { error: compatibleError } = await client.from('vehicle_catalog').insert({ id, ...compatibleValues, created_at: t });
+        if (compatibleError) throw new BadRequestException(`新增车型失败: ${compatibleError.message}`);
+      } else if (error) throw new BadRequestException(`新增车型失败: ${error.message}`);
     }
 
     const syncModes = normalizeSyncModes(b.syncModes).filter(mode => mode !== (b.serviceMode || 'single'));
@@ -187,9 +224,19 @@ export class OperationsService implements OnModuleInit {
       if (sourceImageError) throw new BadRequestException(`读取车型图片失败: ${sourceImageError.message}`);
       for (const mode of syncModes) {
         const targetId = syncedVehicleId(id, mode);
-        const targetValues = { ...values, service_mode: mode, modes_json: json([mode]) };
-        const { error: vehicleError } = await client.from('vehicle_catalog').upsert({ id: targetId, ...targetValues, created_at: t }, { onConflict: 'id' });
-        if (vehicleError) throw new BadRequestException(`同步${mode}车型失败: ${vehicleError.message}`);
+        const { total_count: _sourceCount, ...sharedValues } = values;
+        const targetValues = { ...sharedValues, service_mode: mode, modes_json: json([mode]) };
+        const { data: target } = await client.from('vehicle_catalog').select('*').eq('id', targetId).maybeSingle();
+        const targetSpecs = target ? parse(target.specs_json) : {};
+        const targetCount = Math.max(0, Number(target?.total_count ?? targetSpecs._adminTotalCount ?? 1));
+        targetValues.specs_json = json({ ...(b.specs || {}), _adminTotalCount: targetCount });
+        const { error: vehicleError } = target
+          ? await client.from('vehicle_catalog').update(targetValues).eq('id', targetId)
+          : await client.from('vehicle_catalog').insert({ id: targetId, ...targetValues, total_count: 1, created_at: t });
+        if (vehicleError && /total_count/i.test(vehicleError.message) && !target) {
+          const { error: compatibleError } = await client.from('vehicle_catalog').insert({ id: targetId, ...targetValues, created_at: t });
+          if (compatibleError) throw new BadRequestException(`同步${mode}车型失败: ${compatibleError.message}`);
+        } else if (vehicleError) throw new BadRequestException(`同步${mode}车型失败: ${vehicleError.message}`);
         const { error: deleteImageError } = await client.from('vehicle_images').delete().eq('vehicle_id', targetId);
         if (deleteImageError) throw new BadRequestException(`清理目标车型图片失败: ${deleteImageError.message}`);
         if (sourceImages?.length) {
@@ -201,7 +248,44 @@ export class OperationsService implements OnModuleInit {
     }
     await this.audit(adminId, exists ? 'vehicle.update' : 'vehicle.create', 'vehicle', id, { name: b.name, syncModes });
     serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
+    serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
     return this.getVehicle(id);
+  }
+
+  async updateVehicleCounts(adminId: string, items: Array<{ id?: string; totalCount?: number; manualReservedCount?: number }>) {
+    if (!Array.isArray(items) || !items.length) throw new BadRequestException('请至少提交一条车型数量');
+    if (items.length > 100) throw new BadRequestException('单次最多修改 100 个车型');
+    const normalized = items.map(item => ({
+      id: String(item.id || '').trim(),
+      totalCount: Number(item.totalCount),
+      manualReservedCount: Number(item.manualReservedCount ?? 0),
+    }));
+    if (normalized.some(item => !item.id || !Number.isInteger(item.totalCount) || item.totalCount < 0 || item.totalCount > 9999 || !Number.isInteger(item.manualReservedCount) || item.manualReservedCount < 0 || item.manualReservedCount > 9999)) {
+      throw new BadRequestException('车型数量必须是 0 到 9999 的整数');
+    }
+    const ids = [...new Set(normalized.map(item => item.id))];
+    if (ids.length !== normalized.length) throw new BadRequestException('车型不能重复提交');
+    const client = this.getClient();
+    const { data: vehicles, error: findError } = await client.from('vehicle_catalog').select('*').in('id', ids);
+    if (findError) throw new BadRequestException(`读取车型失败: ${findError.message}`);
+    if ((vehicles || []).length !== ids.length || (vehicles || []).some(vehicle => (vehicle.service_mode || 'single') !== 'single')) {
+      throw new BadRequestException('只能修改现有按趟车型数量');
+    }
+    const timestamp = utc();
+    for (const item of normalized) {
+      const vehicle = (vehicles || []).find(row => row.id === item.id);
+      const specs = parse(vehicle?.specs_json);
+      const updatedSpecs = { ...specs, _adminTotalCount: item.totalCount, manualReservedCount: item.manualReservedCount };
+      const { error } = await client.from('vehicle_catalog').update({ total_count: item.totalCount, specs_json: json(updatedSpecs), updated_at: timestamp }).eq('id', item.id);
+      if (error && /total_count/i.test(error.message)) {
+        const { error: compatibleError } = await client.from('vehicle_catalog').update({ specs_json: json(updatedSpecs), updated_at: timestamp }).eq('id', item.id);
+        if (compatibleError) throw new BadRequestException(`保存车型数量失败: ${compatibleError.message}`);
+      } else if (error) throw new BadRequestException(`保存车型数量失败: ${error.message}`);
+    }
+    await this.audit(adminId, 'vehicle.counts.update', 'vehicle', 'batch', { items: normalized });
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
+    serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
+    return this.listVehicles(true, 'single');
   }
 
   async deleteVehicle(adminId: string, id: string) {
@@ -318,16 +402,19 @@ export class OperationsService implements OnModuleInit {
     await client.from('pricing_rule_versions').update({ status: 'archived' }).eq('status', 'published');
     await client.from('pricing_rule_versions').update({ status: 'published', published_by: adminId, published_at: t, updated_at: t }).eq('id', draft.id).eq('status', 'draft');
     await this.audit(adminId, 'pricing.publish', 'pricing', draft.id, { version: draft.version });
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
     return this.pricing();
   }
 
-  async preview(input: any, useDraft = false) {
+  async preview(input: any, useDraft = false, suppliedConfig?: PricingRule) {
     const state = await this.pricing();
-    const config = (useDraft ? state.draft?.config : state.published?.config) || DEFAULT_PRICING;
+    const config = suppliedConfig || (useDraft ? state.draft?.config : state.published?.config) || DEFAULT_PRICING;
+    this.validatePricing(config);
     return this.calculate(config, input);
   }
 
   calculate(c: any, input: any) {
+    c = this.effectivePricing(c as PricingRule, String(input.vehicleId || ''));
     const distance = Math.max(0, Number(input.distanceMeters) || 0);
     const weight = Math.max(0, Number(input.weightKg) || 0);
     const extraDistance = Math.max(0, distance - c.baseDistanceMeters);
@@ -364,12 +451,15 @@ export class OperationsService implements OnModuleInit {
     const client = this.getClient();
     const t = utc();
     if (asset.isPrimary) await client.from('vehicle_images').update({ is_primary: false }).eq('vehicle_id', vehicleId);
-    await client.from('vehicle_images').insert({
+    const { error: insertError } = await client.from('vehicle_images').insert({
       id: randomUUID(), vehicle_id: vehicleId, url: asset.url,
       object_key: asset.objectKey || '', is_primary: !!asset.isPrimary,
       sort_order: Number(asset.sortOrder) || 0, created_at: t,
     });
+    if (insertError) throw new BadRequestException(`添加车型图片失败: ${insertError.message}`);
     await this.audit(adminId, 'vehicle.image.add', 'vehicle', vehicleId, {});
+    serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
+    serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
     return this.getVehicle(vehicleId);
   }
 
@@ -390,6 +480,7 @@ export class OperationsService implements OnModuleInit {
     }
     await this.audit(adminId, 'vehicle.image.delete', 'vehicle', vehicleId, { imageId });
     serverCache.invalidatePrefix(CACHE_KEYS.VEHICLE_CATALOG);
+    serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
     return this.getVehicle(vehicleId);
   }
 
@@ -612,16 +703,33 @@ export class OperationsService implements OnModuleInit {
   }
 
   private validatePricing(c: any) {
-    const fields = ['baseDistanceMeters', 'baseFeeCents', 'distanceFeePerKmCents', 'coldChainFeeCents', 'overweightFeePerKgCents', 'overweightThresholdKg', 'nightFeeCents', 'remoteAreaFeeCents', 'defaultQuoteValidityHours'];
-    if (fields.some(k => !Number.isFinite(Number(c[k])) || Number(c[k]) < 0)) throw new BadRequestException('计费规则必须为非负数');
+    if (PRICING_NUMBER_FIELDS.some(k => !Number.isFinite(Number(c[k])) || Number(c[k]) < 0)) throw new BadRequestException('计费规则必须为非负数');
     if (c.nightStartHour < 0 || c.nightStartHour > 23 || c.nightEndHour < 0 || c.nightEndHour > 23) throw new BadRequestException('夜间时段无效');
+    for (const [vehicleId, rule] of Object.entries(c.vehicleRules || {}) as Array<[string, Record<string, unknown>]>) {
+      if (!vehicleId.trim() || PRICING_NUMBER_FIELDS.some(key => rule[key] !== undefined && (!Number.isFinite(Number(rule[key])) || Number(rule[key]) < 0))) {
+        throw new BadRequestException('车型专属计费规则无效');
+      }
+      if ((rule.nightStartHour !== undefined && (Number(rule.nightStartHour) < 0 || Number(rule.nightStartHour) > 23)) || (rule.nightEndHour !== undefined && (Number(rule.nightEndHour) < 0 || Number(rule.nightEndHour) > 23))) throw new BadRequestException('车型夜间时段无效');
+    }
   }
 
-  private async audit(adminId: string, action: string, type: string, id: string, detail: any) {
-    await this.getClient().from('audit_logs').insert({
+  private effectivePricing(config: PricingRule, vehicleId: string): PricingRule {
+    const vehicleRule = config.vehicleRules?.[vehicleId] || {};
+    return { ...config, ...vehicleRule, vehicleRules: config.vehicleRules || {} } as PricingRule;
+  }
+
+  private async audit(adminId: string, action: string, type: string, id: string, detail: unknown) {
+    const client = this.getClient();
+    const record = {
       id: randomUUID(), admin_user_id: adminId, action, target_type: type,
       target_id: id, detail: json(detail), created_at: utc(),
-    });
+    };
+    const { error } = await client.from('audit_logs').insert(record);
+    if (error && /(target_type|target_id|detail)/i.test(error.message)) {
+      const { target_type: resource_type, target_id: resource_id, detail: detail_json, ...legacyRecord } = record;
+      const { error: legacyError } = await client.from('audit_logs').insert({ ...legacyRecord, resource_type, resource_id, detail_json });
+      if (legacyError) throw new Error(`写入审计记录失败: ${legacyError.message}`);
+    } else if (error) throw new Error(`写入审计记录失败: ${error.message}`);
   }
 
   // ─── Inquiries ───

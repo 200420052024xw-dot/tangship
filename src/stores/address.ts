@@ -4,7 +4,7 @@ import type { Address, AddressLabel, AddressUsage } from '@/types/address'
 import { consumerRequest } from '@/services/consumer-api'
 
 const LEGACY_KEY = 'address_list_v2'
-const MIGRATED_KEY = 'address_sqlite_migrated_v1'
+const MIGRATED_KEY = 'address_api_migrated_v1'
 
 interface AddressStore {
   addressList: Address[]

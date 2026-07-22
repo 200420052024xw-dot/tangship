@@ -11,6 +11,7 @@ import { fetchVehicle } from '@/services/vehicle-catalog'
 import type { Vehicle } from '@/types/vehicle'
 import { consumerRequest } from '@/services/consumer-api'
 import { MapPin, Package, Send, Truck } from 'lucide-react-taro'
+import { formatOrderTimeRange } from '@/utils/order-time'
 
 export default function OrderConfirmPage() {
   const { draft, resetOrderDraft } = useOrderDraftStore()
@@ -59,7 +60,7 @@ export default function OrderConfirmPage() {
         },
       })
       resetOrderDraft()
-      await Taro.redirectTo({ url: `/pages/order/detail/index?id=${order.id}` })
+      await Taro.redirectTo({ url: `/pages/order/detail/index?id=${order.id}&from=submit` })
     } catch (error) {
       Taro.showToast({ title: error instanceof Error ? error.message : '提交失败', icon: 'none' })
     } finally {
@@ -107,7 +108,7 @@ export default function OrderConfirmPage() {
             <Text className="mb-3 block text-base font-semibold text-slate-900">物品与用车</Text>
             <SummaryRow label="物品名称" value={draft.goods.name} />
             <SummaryRow label="数量 / 重量" value={`${draft.goods.quantity}件 / ${draft.goods.estimatedWeightKg}kg`} />
-            <SummaryRow label="用车时间" value={draft.pickupType === 'immediate' ? '立即用车' : `${draft.scheduledSlot?.date} ${draft.scheduledSlot?.startTime}`} />
+            <SummaryRow label="用车时间" value={draft.pickupType === 'immediate' ? formatOrderTimeRange(new Date()) : `${draft.scheduledSlot?.date} ${draft.scheduledSlot?.startTime}-${draft.scheduledSlot?.endTime}`} />
           </CardContent>
         </Card>
 

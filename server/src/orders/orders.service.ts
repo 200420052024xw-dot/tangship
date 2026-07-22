@@ -12,6 +12,26 @@ export class OrdersService {
 
   private getClient() { return this.supabase.getClient(); }
 
+  private async notifyAdmins(order: { id: string; orderNo: string; status: string }, type: 'new_order' | 'order_status', content: string, createdAt = now()) {
+    const client = this.getClient();
+    const targetPath = `/orders/${order.id}`;
+    const { data: existing, error: findError } = await client.from('admin_notifications').select('id').eq('type', type).eq('target_path', targetPath).eq('content', content).limit(1).maybeSingle();
+    if (findError) throw new Error(`查询管理员通知失败: ${findError.message}`);
+    if (existing) return;
+    const record = {
+      id: randomUUID(), type,
+      title: type === 'new_order' ? `${order.orderNo} 新订单待审核` : `${order.orderNo} 订单状态已更新`,
+      content, target_path: targetPath, order_id: order.id,
+      order_status: order.status, created_at: createdAt,
+    };
+    const { error } = await client.from('admin_notifications').insert(record);
+    if (error && /(order_id|order_status)/i.test(error.message)) {
+      const { order_id: _orderId, order_status: _orderStatus, ...compatibleRecord } = record;
+      const { error: compatibleError } = await client.from('admin_notifications').insert(compatibleRecord);
+      if (compatibleError) throw new Error(`写入管理员通知失败: ${compatibleError.message}`);
+    } else if (error) throw new Error(`写入管理员通知失败: ${error.message}`);
+  }
+
   private async validate(data: CreateOrderInput) {
     if (!data.idempotencyKey || data.idempotencyKey.length > 100) throw new BadRequestException('缺少有效幂等键');
     const { data: vehicle } = await this.getClient().from('vehicle_catalog').select('enabled, modes_json, specs_json').eq('id', data.vehicleId).maybeSingle();
@@ -37,8 +57,11 @@ export class OrdersService {
     const client = this.getClient();
 
     // Idempotency check
-    const { data: existing } = await client.from('orders').select('id').eq('user_id', userId).eq('idempotency_key', data.idempotencyKey).maybeSingle();
-    if (existing) return this.detail(userId, existing.id);
+    const { data: existing } = await client.from('orders').select('id,order_no,status,created_at').eq('user_id', userId).eq('idempotency_key', data.idempotencyKey).maybeSingle();
+    if (existing) {
+      await this.notifyAdmins({ id: existing.id, orderNo: existing.order_no, status: 'pending_review' }, 'new_order', '用户提交了新订单，等待管理员审核', existing.created_at);
+      return this.detail(userId, existing.id);
+    }
 
     const id = randomUUID();
     const created = now();
@@ -55,8 +78,11 @@ export class OrdersService {
     });
     if (orderErr) {
       // Check idempotency again on constraint violation
-      const { data: dup } = await client.from('orders').select('id').eq('user_id', userId).eq('idempotency_key', data.idempotencyKey).maybeSingle();
-      if (dup) return this.detail(userId, dup.id);
+      const { data: dup } = await client.from('orders').select('id,order_no,status,created_at').eq('user_id', userId).eq('idempotency_key', data.idempotencyKey).maybeSingle();
+      if (dup) {
+        await this.notifyAdmins({ id: dup.id, orderNo: dup.order_no, status: 'pending_review' }, 'new_order', '用户提交了新订单，等待管理员审核', dup.created_at);
+        return this.detail(userId, dup.id);
+      }
       throw new Error(`创建订单失败: ${orderErr.message}`);
     }
 
@@ -86,6 +112,7 @@ export class OrdersService {
     }
 
     await this.log(id, null, 'pending_review', 'user', userId, '用户提交订车需求');
+    await this.notifyAdmins({ id, orderNo, status: 'pending_review' }, 'new_order', '用户提交了新订单，等待管理员审核', created);
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
@@ -245,6 +272,10 @@ export class OrdersService {
       const { data: logs } = await client.from('order_status_logs').select('*').eq('order_id', order.id).order('created_at', { ascending: true });
       statusLogs = logs;
     }
+    if (!admin) {
+      const { internal_note: _internalNote, dispatch_note: _dispatchNote, ...publicOrder } = order;
+      return { ...publicOrder, addresses: (addrRes.data || []) as any, items: (itemRes.data || []) as any, quote: quoteRes.data || null };
+    }
     return { ...order, addresses: (addrRes.data || []) as any, items: (itemRes.data || []) as any, quote: quoteRes.data || null, statusLogs };
   }
 
@@ -256,6 +287,7 @@ export class OrdersService {
     const { data: updated, error } = await this.getClient().from('orders').update({ status: 'cancelled', updated_at: time }).eq('id', id).eq('user_id', userId).eq('status', order.status).select().maybeSingle();
     if (error || !updated) throw new ConflictException('订单状态已变化，请刷新后重试');
     await this.log(id, order.status, 'cancelled', 'user', userId, '用户取消');
+    await this.notifyAdmins({ id, orderNo: order.order_no, status: 'cancelled' }, 'order_status', '用户已取消订单', time);
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
@@ -321,33 +353,43 @@ export class OrdersService {
     });
     if (insertErr) throw new Error(`创建支付记录失败: ${insertErr.message}`);
     await this.log(id, 'pending_payment', 'paid', 'user', userId, '用户确认支付');
+    await this.notifyAdmins({ id, orderNo: order.order_no, status: 'paid' }, 'order_status', '用户已完成支付，等待安排车辆', time);
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     return this.detail(userId, id);
   }
 
   async reviewWithNotes(adminId: string, id: string, data: any) {
-    const result = await this.review(adminId, id, data);
-    await this.getClient().from('orders').update({
+    await this.review(adminId, id, data);
+    const { error } = await this.getClient().from('orders').update({
       internal_note: String(data.internalNote || '') || null,
       user_note: String(data.userNote || '') || null,
       reserved_vehicle_count: data.decision === 'approve' ? Math.min(99, Math.max(1, Number(data.vehicleCount) || 1)) : 0,
     }).eq('id', id);
+    if (error) throw new Error(`保存审核备注失败: ${error.message}`);
     serverCache.invalidatePrefix(CACHE_KEYS.ORDERS_PREFIX);
     serverCache.invalidate(CACHE_KEYS.ADMIN_DASHBOARD);
-    return result;
+    return this.adminDetail(id);
   }
 
   private async log(orderId: string, from: string | null, to: string, operatorType: string, operatorId: string, remark: string) {
-    await this.getClient().from('order_status_logs').insert({
+    const { error } = await this.getClient().from('order_status_logs').insert({
       id: randomUUID(), order_id: orderId, from_status: from, to_status: to,
       operator_type: operatorType, operator_id: operatorId, remark, created_at: now(),
     });
+    if (error) throw new Error(`写入订单状态记录失败: ${error.message}`);
   }
 
   private async audit(adminId: string, action: string, targetId: string, detail: unknown) {
-    await this.getClient().from('audit_logs').insert({
+    const client = this.getClient();
+    const record = {
       id: randomUUID(), admin_user_id: adminId, action, target_type: 'order',
       target_id: targetId, detail: JSON.stringify(detail), created_at: now(),
-    });
+    };
+    const { error } = await client.from('audit_logs').insert(record);
+    if (error && /(target_type|target_id|detail)/i.test(error.message)) {
+      const { target_type: resource_type, target_id: resource_id, detail: detail_json, ...legacyRecord } = record;
+      const { error: legacyError } = await client.from('audit_logs').insert({ ...legacyRecord, resource_type, resource_id, detail_json });
+      if (legacyError) throw new Error(`写入审核记录失败: ${legacyError.message}`);
+    } else if (error) throw new Error(`写入审核记录失败: ${error.message}`);
   }
 }

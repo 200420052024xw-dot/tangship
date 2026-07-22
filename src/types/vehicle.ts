@@ -46,6 +46,8 @@ export interface VehicleSpec {
   speedKmh: string
   /** 充电时长,展示用字符串 */
   chargeTime: string
+  /** 是否支持冷藏运输 */
+  supportsRefrigeration?: boolean
   /** 温控区间(仅冷藏车),如 "-18°C ~ +8°C" */
   temperatureRange?: string
 }

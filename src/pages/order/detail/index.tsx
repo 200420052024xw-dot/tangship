@@ -14,6 +14,7 @@ import { consumerRequest } from '@/services/consumer-api'
 import { PageHeader } from '@/components/layout/page-header'
 import { ContactPopup } from '@/components/inquiry/ContactPopup'
 import { getOrderSnapshot, primeOrderDetail, refreshOrderDetail, type OrderDetail } from '@/services/order-detail'
+import { formatOrderUseTime } from '@/utils/order-time'
 
 type Detail = OrderDetail
 
@@ -75,8 +76,10 @@ export default function OrderDetailPage() {
   const [paying, setPaying] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [contactDialogOpen, setContactDialogOpen] = useState(false)
+  const [fromSubmit, setFromSubmit] = useState(Taro.getCurrentInstance().router?.params?.from === 'submit')
 
-  useLoad(({ id }) => {
+  useLoad(({ id, from }) => {
+    setFromSubmit(from === 'submit')
     setOrderId(id)
     const snapshot = getOrderSnapshot(id)
     if (snapshot) setOrder(snapshot)
@@ -130,10 +133,11 @@ export default function OrderDetailPage() {
   const canCancel = ['pending_review', 'pending_payment'].includes(order.status)
   const isPaid = order.status === 'paid'
   const isDelivering = order.status === 'delivering'
+  const requiresContactToCancel = ['paid', 'dispatching', 'delivering'].includes(order.status)
 
   return (
     <View className="min-h-screen bg-background pb-8">
-      <PageHeader title="订单详情" />
+      <PageHeader title="订单详情" onBack={() => fromSubmit ? Taro.switchTab({ url: '/pages/index/index' }) : Taro.navigateBack()} />
       {/* 顶部状态栏 */}
       <View className={`${sc.bg} mx-4 mt-3 rounded-xl px-4 py-5`}>
         <View className="flex flex-row items-center gap-2">
@@ -200,7 +204,7 @@ export default function OrderDetailPage() {
             <Row label="车型" value={order.vehicle_id} />
             <Row label="服务模式" value={modeLabels[order.mode] || order.mode} />
             <Row label="物品" value={order.items?.map((i: Detail) => `${i.name} × ${i.quantity}`).join('、')} />
-            <Row label="预约时间" value={order.scheduled_at ? formatTime(order.scheduled_at) : '立即用车'} />
+            <Row label="用车时间" value={formatOrderUseTime(order)} />
             <Row label="下单时间" value={formatTime(order.created_at)} />
           </CardContent>
         </Card>
@@ -294,8 +298,14 @@ export default function OrderDetailPage() {
           </Button>
         )}
 
+        {requiresContactToCancel && (
+          <Button variant="outline" className="w-full border-red-200 text-red-600" onClick={() => setContactDialogOpen(true)}>
+            <View className="flex flex-row items-center gap-2"><Phone size={16} color="#C43D3D" /><Text className="block">申请取消订单</Text></View>
+          </Button>
+        )}
+
         {/* 配送中订单 - 联系客服 */}
-        {isDelivering && (
+        {isDelivering && !requiresContactToCancel && (
           <Button variant="outline" className="w-full" onClick={() => setContactDialogOpen(true)}>
             <View className="flex flex-row items-center gap-2">
               <Phone size={16} color="#475569" />
@@ -331,7 +341,7 @@ export default function OrderDetailPage() {
         open={contactDialogOpen}
         onClose={() => setContactDialogOpen(false)}
         title="联系客服"
-        description="配送过程中如有问题，请通过以下方式联系我们"
+        description={requiresContactToCancel ? '订单已支付或进入调度，请联系客服申请取消；系统不会直接变更订单状态。' : '配送过程中如有问题，请通过以下方式联系我们'}
         showSuccessIcon={false}
       />
     </View>

@@ -90,7 +90,6 @@ export const FeePreview: FC<FeePreviewProps> = ({
             <Text className="block text-sm text-slate-700">本单预估</Text>
             <Text className="block text-xl font-bold text-primary">{loading ? '计算中…' : amount}</Text>
           </View>
-          <Text className="mt-1 block text-xs leading-relaxed text-slate-500">根据当前路线、车型和货物预测，最终费用以后台审核报价为准。</Text>
         </View>
       </CardContent>
     </Card>

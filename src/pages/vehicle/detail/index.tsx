@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
   Battery, Gauge, Grid3x3, Weight, Ruler,
-  ChevronLeft, ChevronRight, Truck,
+  ChevronLeft, ChevronRight, Snowflake, Truck,
 } from 'lucide-react-taro'
 import { getVehicleSnapshot, refreshVehicle } from '@/services/vehicle-catalog'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -98,7 +98,9 @@ const VehicleDetailPage: FC = () => {
   const primaryLabel = modeSupported ? MODE_BUTTON_LABEL[activeMode] : '重新选择业务模式'
   const startFrom = vehicle.pricingDescription.startFrom
   const images = vehicle.images?.length ? vehicle.images : []
-  const includedKm = (vehicle.pricingDescription as any).includedKm
+  const supportsRefrigeration = vehicle.specs.supportsRefrigeration
+    ?? Boolean(vehicle.specs.temperatureRange?.trim())
+  const includedKm = vehicle.pricingDescription.includedKm
 
   return (
     <View className="flex h-screen flex-col overflow-hidden bg-background">
@@ -221,6 +223,17 @@ const VehicleDetailPage: FC = () => {
                 </View>
                 <Text className="block text-sm font-semibold text-slate-800">{vehicle.specs.speedKmh}km/h</Text>
               </View>
+              {supportsRefrigeration && vehicle.specs.temperatureRange && (
+                <View className="col-span-2 rounded-lg bg-cyan-50 p-3">
+                  <View className="mb-1 flex items-center gap-2">
+                    <Snowflake size={14} color="#06B6D4" />
+                    <Text className="block text-xs text-slate-500">冷藏温度</Text>
+                  </View>
+                  <Text className="block text-base font-semibold text-slate-800">
+                    {vehicle.specs.temperatureRange}
+                  </Text>
+                </View>
+              )}
               {vehicle.specs.cargoDimensionsMm && (
                 <View className="col-span-2 rounded-lg bg-slate-50 p-3">
                   <View className="flex items-center gap-2 mb-1">
@@ -249,7 +262,6 @@ const VehicleDetailPage: FC = () => {
         <Card className="mb-4 border-blue-100">
           <CardContent className="p-4">
             <Text className="block text-base font-semibold text-slate-800 mb-2">{activeMode === 'monthly' ? '包月专线' : activeMode === 'single' ? '按趟配送' : '租购服务'}</Text>
-            <Text className="block text-sm text-slate-700 mb-3">{vehicle.pricingDescription.description}</Text>
             {vehicle.pricingDescription.breakdown && (
               <View className="bg-white rounded-lg p-3">
                 {vehicle.pricingDescription.breakdown.map((b, idx) => (
@@ -267,7 +279,7 @@ const VehicleDetailPage: FC = () => {
             )}
             {startFrom !== undefined && (
               <View className="mt-3 flex items-end justify-between">
-                <Text className="block text-xs text-slate-400">参考价格，最终以后台核价为准</Text>
+                <Text className="block text-xs text-slate-400">起送价格</Text>
                 <Text className="block text-2xl font-bold text-primary">¥{startFrom}</Text>
               </View>
             )}
@@ -277,9 +289,6 @@ const VehicleDetailPage: FC = () => {
                 <Text className="block text-base font-medium text-slate-800">{includedKm} km</Text>
               </View>
             )}
-            <Text className="block text-xs text-amber-700 mt-3">
-              ⚠️ 此为起步参考价，最终费用由服务端根据实际路线核验后给出
-            </Text>
           </CardContent>
         </Card>
       </View>
